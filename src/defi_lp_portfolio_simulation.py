@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DeFi LP Portfolio Simulation Script
+LP Portfolio Simulation Script
 
 This script:
 1. Fetches top N DeFi protocols from DeFiLlama
@@ -14,18 +14,22 @@ from __future__ import annotations
 import json
 import requests
 import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 # Configuration
-TOP_N_PROTOCOLS = 10
+TOP_EVM_CHAINS = [
+    "Ethereum",
+    "BSC",
+    "Base",
+    "Arbitrum",
+    "Avalanche",
+]  # Top 5 EVM chains by TVL
 ANALYSIS_MONTHS = 24
 SIMULATION_PERIOD_DAYS = 30  # One month simulation periods
 PERIOD_SPACING_DAYS = 1  # Number of days between the start of each period
-ANNUAL_INTEREST_RATE = 0.25  # 25% annualized
-MONTHLY_INTEREST_RATE = (1 + ANNUAL_INTEREST_RATE) ** (1 / 12) - 1  # ~2% per month
+DAILY_FEE_RATE = 0.003  # 0.3% daily trading fees (typical for AMM pools)
 
 # Liquidity withdrawal configuration
 WITHDRAWAL_ENABLED = True  # Enable partial liquidity withdrawal
@@ -33,40 +37,10 @@ WITHDRAWAL_TIMING_PCT = 0.25  # When to withdraw (0.5 = halfway through period)
 WITHDRAWAL_AMOUNT_PCT = 0.7  # How much to withdraw (0.5 = 50% of liquidity)
 
 
-def fetch_top_protocols(n: int = TOP_N_PROTOCOLS) -> List[Dict]:
-    """Fetch top N DeFi protocols by TVL from DeFiLlama."""
-    print(f"Fetching top {n} DeFi protocols...")
-
-    url = "https://api.llama.fi/protocols"
-    response = requests.get(url, timeout=30)
-
-    if not response.ok:
-        raise RuntimeError(f"Failed to fetch protocols: {response.status_code}")
-
-    protocols = response.json()
-
-    # Filter for onchain DeFi protocols (exclude CEXes and staking)
-    excluded_categories = {
-        "CEX",
-        "Liquid Staking",
-        "Staking",
-        "Restaking",
-        "Bridge",
-        "Liquid Restaking",
-        "Canonical Bridge",
-    }
-    defi_protocols = [
-        p for p in protocols if p.get("category") not in excluded_categories
-    ]
-    defi_protocols.sort(key=lambda x: x.get("tvl", 0) or 0, reverse=True)
-
-    if len(defi_protocols) < n:
-        return defi_protocols
-
-    top_protocols = defi_protocols[:n]
-    print(f"Selected protocols: {[p['name'] for p in top_protocols]}")
-
-    return top_protocols
+def get_top_evm_chains() -> List[str]:
+    """Return the hardcoded list of top EVM chains."""
+    print(f"Using top {len(TOP_EVM_CHAINS)} EVM chains: {', '.join(TOP_EVM_CHAINS)}")
+    return TOP_EVM_CHAINS
 
 
 def cached_api_fetch(url: str, cache_file: Path) -> Dict:
@@ -85,49 +59,16 @@ def cached_api_fetch(url: str, cache_file: Path) -> Dict:
     return response.json()
 
 
-def fetch_protocol_history(slug: str) -> Dict:
-    """Fetch historical TVL data for a protocol."""
-    cache_file = Path("cache") / f"{slug}_history.json"
-    return cached_api_fetch(f"https://api.llama.fi/protocol/{slug}", cache_file)
+def fetch_chain_history(chain: str) -> Dict[int, float]:
+    """Fetch historical TVL data for a chain."""
+    cache_file = Path("cache") / f"chain_{chain}_history.json"
+    url = f"https://api.llama.fi/v2/historicalChainTvl/{chain}"
+    data = cached_api_fetch(url, cache_file)
 
-
-def extract_chain_tvl_series(chain_tvls: Dict) -> Dict[int, float]:
-    """Sum TVL across all chains for each timestamp."""
-    all_timestamps = set()
-    for chain_data in chain_tvls.values():
-        all_timestamps.update(entry["date"] for entry in chain_data["tvl"])
-
-    tvl_series = {}
-    for timestamp in all_timestamps:
-        total_tvl = sum(
-            entry["totalLiquidityUSD"]
-            for chain_data in chain_tvls.values()
-            for entry in chain_data["tvl"]
-            if entry["date"] == timestamp
-        )
-        if total_tvl > 0:
-            tvl_series[timestamp] = total_tvl
-
-    return tvl_series
-
-
-def extract_total_tvl_series(protocol_data: Dict) -> Dict[int, float]:
-    """Extract total TVL series across all chains for a protocol."""
-    if not protocol_data:
+    if not data:
         return {}
 
-    # Try to use the 'tvl' key first
-    if "tvl" in protocol_data:
-        return {
-            entry["date"]: entry.get("tvl", entry.get("totalLiquidityUSD", 0))
-            for entry in protocol_data["tvl"]
-        }
-
-    # Fall back to summing chainTvls
-    if "chainTvls" in protocol_data:
-        return extract_chain_tvl_series(protocol_data["chainTvls"])
-
-    return {}
+    return {int(entry["date"]): float(entry["tvl"]) for entry in data}
 
 
 def forward_fill_tvl_data(
@@ -193,33 +134,33 @@ def get_tvl_at_timestamp(tvl_data: Dict[int, float], timestamp: int) -> float:
     return tvl_data[latest_time] if latest_time else 0.0
 
 
-def calculate_protocol_share_at_timestamp(
-    protocol_tvls: Dict[str, Dict[int, float]],
+def calculate_chain_share_at_timestamp(
+    chain_tvls: Dict[str, Dict[int, float]],
     global_tvl: Dict[int, float],
     timestamp: int,
 ) -> Dict[str, float]:
-    """Calculate each protocol's share at a specific timestamp."""
+    """Calculate each chain's share at a specific timestamp."""
     total_global_tvl = get_tvl_at_timestamp(global_tvl, timestamp)
     if total_global_tvl <= 0:
         return {}
 
     return {
-        protocol: max(0, get_tvl_at_timestamp(tvl_data, timestamp) / total_global_tvl)
-        for protocol, tvl_data in protocol_tvls.items()
+        chain: max(0, get_tvl_at_timestamp(tvl_data, timestamp) / total_global_tvl)
+        for chain, tvl_data in chain_tvls.items()
     }
 
 
 def calculate_tvl_shares(
-    protocol_tvls: Dict[str, Dict[int, float]],
+    chain_tvls: Dict[str, Dict[int, float]],
     global_tvl: Dict[int, float],
     start_date: datetime,
 ) -> Dict[str, Dict[int, float]]:
-    """Calculate each protocol's share of global DeFi TVL over time."""
-    print("Calculating TVL shares using global DeFi TVL...")
+    """Calculate each chain's share of global DeFi TVL over time."""
+    print("Calculating TVL shares per chain using global DeFi TVL...")
 
     # Get analysis timestamps
     all_timestamps = set()
-    for tvl_data in protocol_tvls.values():
+    for tvl_data in chain_tvls.values():
         all_timestamps.update(tvl_data.keys())
     all_timestamps.update(global_tvl.keys())
 
@@ -227,29 +168,29 @@ def calculate_tvl_shares(
     analysis_timestamps = sorted(t for t in all_timestamps if t >= start_timestamp)
     print(f"Found {len(analysis_timestamps)} timestamps in analysis period")
 
-    # Initialize shares for all protocols
-    tvl_shares = {protocol: {} for protocol in protocol_tvls.keys()}
+    # Initialize shares for all chains
+    tvl_shares = {chain: {} for chain in chain_tvls.keys()}
 
     for timestamp in analysis_timestamps:
-        shares_at_t = calculate_protocol_share_at_timestamp(
-            protocol_tvls, global_tvl, timestamp
+        shares_at_t = calculate_chain_share_at_timestamp(
+            chain_tvls, global_tvl, timestamp
         )
 
-        for protocol in protocol_tvls.keys():
-            if protocol in shares_at_t:
-                tvl_shares[protocol][timestamp] = shares_at_t[protocol]
+        for chain in chain_tvls.keys():
+            if chain in shares_at_t:
+                tvl_shares[chain][timestamp] = shares_at_t[chain]
             else:
                 # Forward-fill from previous timestamp
                 prev_time = find_latest_timestamp(
-                    list(tvl_shares[protocol].keys()), timestamp - 1
+                    list(tvl_shares[chain].keys()), timestamp - 1
                 )
-                tvl_shares[protocol][timestamp] = (
-                    tvl_shares[protocol][prev_time] if prev_time else 0.0
+                tvl_shares[chain][timestamp] = (
+                    tvl_shares[chain][prev_time] if prev_time else 0.0
                 )
 
     # Print debug info
-    for protocol in tvl_shares:
-        print(f"{protocol}: {len(tvl_shares[protocol])} data points")
+    for chain in tvl_shares:
+        print(f"{chain}: {len(tvl_shares[chain])} data points")
 
     return tvl_shares
 
@@ -284,33 +225,35 @@ def calculate_pool_value(k: float, up_price: float, down_price: float) -> float:
 
 
 def simulate_lp_pool(
-    protocol: str,
+    chain: str,
     tvl_shares: Dict[int, float],
     start_timestamp: int,
     end_timestamp: int,
     initial_value: float = 1000,
-) -> Tuple[Dict[int, float], Dict[int, Tuple[float, float]]]:
-    """Simulate UP/DOWN token LP pool for one protocol over one period."""
-    if protocol not in tvl_shares:
-        return {}, {}
+) -> Tuple[Dict[int, float], Dict[int, Tuple[float, float]], float]:
+    """Simulate UP/DOWN token LP pool for one chain over one period."""
+    if chain not in tvl_shares:
+        return {}, {}, 0.0
 
-    protocol_data = tvl_shares[protocol]
+    chain_data = tvl_shares[chain]
     available_times = [
-        t for t in protocol_data.keys() if start_timestamp <= t <= end_timestamp
+        t for t in chain_data.keys() if start_timestamp <= t <= end_timestamp
     ]
     available_times.sort()
 
     if len(available_times) < 2:
-        return {}, {}
+        return {}, {}, 0.0
 
-    start_share = protocol_data[available_times[0]]
+    start_share = chain_data[available_times[0]]
     if start_share <= 0:
-        return {}, {}
+        return {}, {}, 0.0
 
     # Initialize pool state
     k = 1000.0 * 1000.0  # Initial constant product (1000 UP * 1000 DOWN tokens)
     external_up_tokens, external_down_tokens = 0.0, 0.0
     withdrawal_executed = False
+    accumulated_fees = 0.0
+    last_timestamp = available_times[0]
 
     # Calculate withdrawal timing
     period_duration = end_timestamp - start_timestamp
@@ -320,9 +263,19 @@ def simulate_lp_pool(
     external_holdings = {}
 
     for timestamp in available_times:
-        current_share = protocol_data[timestamp]
+        current_share = chain_data[timestamp]
         share_ratio = current_share / start_share
         up_price, down_price = calculate_token_prices(share_ratio)
+
+        # Calculate fees based on days elapsed since last update
+        days_elapsed = (timestamp - last_timestamp) / 86400
+        if days_elapsed > 0:
+            # Fee accrual based on current pool value
+            current_pool_value = calculate_pool_value(k, up_price, down_price)
+            daily_fees = current_pool_value * DAILY_FEE_RATE * days_elapsed
+            accumulated_fees += daily_fees
+
+        last_timestamp = timestamp
 
         # Execute withdrawal if needed
         if (
@@ -341,24 +294,29 @@ def simulate_lp_pool(
         pool_values[timestamp] = calculate_pool_value(k, up_price, down_price)
         external_holdings[timestamp] = (external_up_tokens, external_down_tokens)
 
-    return pool_values, external_holdings
+    return pool_values, external_holdings, accumulated_fees
 
 
-def calculate_protocol_contribution(
-    protocol: str,
+def calculate_chain_contribution(
+    chain: str,
     pool_values: Dict[int, float],
     external_holdings: Dict[int, Tuple[float, float]],
     tvl_shares: Dict[str, Dict[int, float]],
     timestamps: List[int],
-) -> Dict[int, float]:
-    """Calculate a protocol's contribution to portfolio returns over time."""
-    contributions = {}
-    start_share = tvl_shares[protocol][timestamps[0]]
+    fees: float,
+) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
+    """Calculate a chain's contribution to portfolio returns over time.
+    Returns: (total_contributions, fee_contributions, il_contributions)
+    """
+    total_contributions = {}
+    fee_contributions = {}
+    il_contributions = {}
+    start_share = tvl_shares[chain][timestamps[0]]
 
     for t in timestamps:
-        if t in pool_values and protocol in tvl_shares and t in tvl_shares[protocol]:
+        if t in pool_values and chain in tvl_shares and t in tvl_shares[chain]:
             # Calculate token prices at this timestamp
-            current_share = tvl_shares[protocol][t]
+            current_share = tvl_shares[chain][t]
             share_ratio = current_share / start_share
             up_price, down_price = calculate_token_prices(share_ratio)
 
@@ -366,32 +324,43 @@ def calculate_protocol_contribution(
             ext_up, ext_down = external_holdings[t]
             external_value = ext_up * up_price + ext_down * down_price
 
-            # Total value = pool value + external value
-            total_value = pool_values[t] + external_value
+            # Total value = pool value + external value + accumulated fees
+            total_value = pool_values[t] + external_value + fees
 
-            # Calculate return (each protocol starts with 1000 investment)
-            protocol_return = total_value / 1000.0 - 1
-            contributions[t] = protocol_return
+            # Calculate return components (each chain starts with 1000 investment)
+            total_return = total_value / 1000.0 - 1
+            fee_return = fees / 1000.0
+            # IL return is everything except fees: (pool + external - initial) / initial - fee_return
+            portfolio_value_no_fees = pool_values[t] + external_value
+            il_return = (portfolio_value_no_fees / 1000.0 - 1) - fee_return
 
-    return contributions
+            total_contributions[t] = total_return
+            fee_contributions[t] = fee_return
+            il_contributions[t] = il_return
+
+    return total_contributions, fee_contributions, il_contributions
 
 
 def simulate_single_period(
-    protocols: List[str],
+    chains: List[str],
     tvl_shares: Dict[str, Dict[int, float]],
     start_timestamp: int,
     end_timestamp: int,
     period_key: str,
     debug: bool = False,
-) -> Dict[int, float]:
-    """Simulate portfolio for a single period."""
+) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
+    """Simulate portfolio for a single period.
+    Returns: (total_portfolio_value, fee_portfolio_value, il_portfolio_value)
+    """
     portfolio_value = {}
-    protocols_with_data_at_timestamp = {}
-    successful_protocols = 0
+    fee_portfolio_value = {}
+    il_portfolio_value = {}
+    chains_with_data_at_timestamp = {}
+    successful_chains = 0
 
-    for protocol in protocols:
-        pool_values, external_holdings = simulate_lp_pool(
-            protocol, tvl_shares, start_timestamp, end_timestamp
+    for chain in chains:
+        pool_values, external_holdings, fees = simulate_lp_pool(
+            chain, tvl_shares, start_timestamp, end_timestamp
         )
 
         if not pool_values:
@@ -401,60 +370,79 @@ def simulate_single_period(
         if len(timestamps) < 2 or pool_values[timestamps[0]] <= 0:
             continue
 
-        successful_protocols += 1
-        contributions = calculate_protocol_contribution(
-            protocol, pool_values, external_holdings, tvl_shares, timestamps
+        successful_chains += 1
+        total_contributions, fee_contributions, il_contributions = (
+            calculate_chain_contribution(
+                chain, pool_values, external_holdings, tvl_shares, timestamps, fees
+            )
         )
 
         # Add to portfolio
-        for t, contribution in contributions.items():
-            portfolio_value[t] = portfolio_value.get(t, 0) + contribution
-            protocols_with_data_at_timestamp[t] = (
-                protocols_with_data_at_timestamp.get(t, 0) + 1
+        for t in total_contributions:
+            portfolio_value[t] = portfolio_value.get(t, 0) + total_contributions[t]
+            fee_portfolio_value[t] = (
+                fee_portfolio_value.get(t, 0) + fee_contributions[t]
+            )
+            il_portfolio_value[t] = il_portfolio_value.get(t, 0) + il_contributions[t]
+            chains_with_data_at_timestamp[t] = (
+                chains_with_data_at_timestamp.get(t, 0) + 1
             )
 
         # Debug output for first few periods
-        if debug and successful_protocols <= 3:
-            final_value = pool_values[timestamps[-1]] + sum(
-                ext * price
-                for ext, price in zip(
-                    external_holdings[timestamps[-1]],
-                    calculate_token_prices(
-                        tvl_shares[protocol][timestamps[-1]]
-                        / tvl_shares[protocol][timestamps[0]]
-                    ),
+        if debug and successful_chains <= 3:
+            final_value = (
+                pool_values[timestamps[-1]]
+                + fees
+                + sum(
+                    ext * price
+                    for ext, price in zip(
+                        external_holdings[timestamps[-1]],
+                        calculate_token_prices(
+                            tvl_shares[chain][timestamps[-1]]
+                            / tvl_shares[chain][timestamps[0]]
+                        ),
+                    )
                 )
             )
             print(
-                f"  {protocol}: total={final_value:.2f}, return={((final_value/1000-1)*100):.2f}%"
+                f"  {chain}: total={final_value:.2f}, return={((final_value/1000-1)*100):.2f}%"
             )
 
-    # Average across protocols that have data at each timestamp
+    # Average across chains that have data at each timestamp
     for t in portfolio_value:
-        if protocols_with_data_at_timestamp.get(t, 0) > 0:
-            portfolio_value[t] /= protocols_with_data_at_timestamp[t]
+        if chains_with_data_at_timestamp.get(t, 0) > 0:
+            portfolio_value[t] /= chains_with_data_at_timestamp[t]
+            fee_portfolio_value[t] /= chains_with_data_at_timestamp[t]
+            il_portfolio_value[t] /= chains_with_data_at_timestamp[t]
 
     if debug and portfolio_value:
         final_return = portfolio_value[max(portfolio_value.keys())]
         print(
-            f"  Period summary: {successful_protocols} protocols, portfolio return: {(final_return*100):.2f}%"
+            f"  Period summary: {successful_chains} chains, portfolio return: {(final_return*100):.2f}%"
         )
     elif debug:
-        print(f"  No successful protocols in {period_key}")
+        print(f"  No successful chains in {period_key}")
 
-    return portfolio_value
+    return portfolio_value, fee_portfolio_value, il_portfolio_value
 
 
 def run_portfolio_simulation(
-    protocols: List[str], tvl_shares: Dict[str, Dict[int, float]], start_date: datetime
-) -> Tuple[Dict[str, Dict[int, float]], Dict[str, Dict[int, Tuple[float, float]]]]:
-    """Run portfolio simulation with overlapping 1-month periods."""
+    chains: List[str], tvl_shares: Dict[str, Dict[int, float]], start_date: datetime
+) -> Tuple[
+    Dict[str, Dict[int, float]],
+    Dict[str, Dict[int, float]],
+    Dict[str, Dict[int, float]],
+]:
+    """Run portfolio simulation with overlapping 1-month periods.
+    Returns: (total_performances, fee_performances, il_performances)
+    """
     print(
         f"Running overlapping portfolio simulations (periods spaced {PERIOD_SPACING_DAYS} days apart)..."
     )
 
     portfolio_performances = {}
-    all_external_holdings = {}
+    fee_performances = {}
+    il_performances = {}
 
     # Generate date ranges for overlapping periods
     current_date = start_date
@@ -473,8 +461,8 @@ def run_portfolio_simulation(
         end_timestamp = int(period_end.timestamp())
 
         # Simulate this period
-        portfolio_value = simulate_single_period(
-            protocols,
+        portfolio_value, fee_value, il_value = simulate_single_period(
+            chains,
             tvl_shares,
             start_timestamp,
             end_timestamp,
@@ -483,51 +471,14 @@ def run_portfolio_simulation(
         )
 
         portfolio_performances[period_key] = portfolio_value
-        all_external_holdings[period_key] = (
-            {}
-        )  # Simplified - not tracking detailed external holdings
+        fee_performances[period_key] = fee_value
+        il_performances[period_key] = il_value
 
         current_date += timedelta(days=PERIOD_SPACING_DAYS)
         period_count += 1
 
     print(f"Generated {period_count} overlapping 1-month periods")
-    return portfolio_performances, all_external_holdings
-
-
-def apply_interest_rate_discount(
-    portfolio_performances: Dict[str, Dict[int, float]]
-) -> Dict[str, Dict[int, float]]:
-    """Apply daily interest rate discounting to portfolio returns."""
-    print("Applying interest rate discounting...")
-
-    daily_rate = (1 + ANNUAL_INTEREST_RATE) ** (1 / 365) - 1
-    discounted_performances = {}
-
-    for period, performance in portfolio_performances.items():
-        discounted_performance = {}
-        timestamps = sorted(performance.keys())
-
-        if not timestamps:
-            continue
-
-        start_timestamp = timestamps[0]
-
-        for timestamp in timestamps:
-            days_elapsed = (timestamp - start_timestamp) / 86400
-            discount_factor = (1 + daily_rate) ** days_elapsed
-
-            # Adjust return for opportunity cost
-            # portfolio_value contains period-to-date returns (compounded)
-            raw_return = performance[timestamp]
-            # Convert to value, discount, then back to return
-            portfolio_value_at_t = 1 + raw_return  # Convert return to value
-            discounted_value = portfolio_value_at_t / discount_factor
-            discounted_return = discounted_value - 1
-            discounted_performance[timestamp] = discounted_return
-
-        discounted_performances[period] = discounted_performance
-
-    return discounted_performances
+    return portfolio_performances, fee_performances, il_performances
 
 
 def to_percentage(decimal_values: List[float]) -> List[float]:
@@ -535,69 +486,36 @@ def to_percentage(decimal_values: List[float]) -> List[float]:
     return [r * 100 for r in decimal_values]
 
 
-def plot_portfolio_performance(
+def extract_final_returns(
     portfolio_performances: Dict[str, Dict[int, float]]
 ) -> List[float]:
-    """Create overlay plot of all portfolio performance periods."""
-    print("Creating performance plot...")
-
-    plt.figure(figsize=(12, 8))
-    colors = plt.cm.tab20(np.linspace(0, 1, len(portfolio_performances)))
+    """Extract final returns from all portfolio performance periods."""
     all_final_returns = []
 
-    for i, (_, performance) in enumerate(portfolio_performances.items()):
+    for _, performance in portfolio_performances.items():
         if not performance or len(performance) < 2:
             continue
 
         timestamps = sorted(performance.keys())
-        start_timestamp = timestamps[0]
-
-        # Convert to days and percentage returns for plotting
-        days = [(t - start_timestamp) / 86400 for t in timestamps]
-        returns = [performance[t] for t in timestamps]
-
-        plt.plot(days, to_percentage(returns), color=colors[i], alpha=0.7, linewidth=1)
-        all_final_returns.append(returns[-1])  # Keep as decimal for statistics
-
-    # Format plot
-    plt.axhline(y=0, color="black", linestyle="-", alpha=0.3)
-    plt.xlabel("Days into Period")
-    plt.ylabel("Portfolio Return (%)")
-
-    withdrawal_text = (
-        f"Withdrawal: {WITHDRAWAL_AMOUNT_PCT:.0%} at {WITHDRAWAL_TIMING_PCT:.0%}"
-        if WITHDRAWAL_ENABLED
-        else "No Withdrawal"
-    )
-    plt.title(
-        f"UP/DOWN Token LP Portfolio Performance (Overlapping 1-Month Periods)\n"
-        f"(Top {TOP_N_PROTOCOLS} DeFi Protocols, {ANNUAL_INTEREST_RATE:.0%} Annual Discount Rate, {withdrawal_text})"
-    )
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-
-    # Save plot
-    output_dir = Path("portfolio_results")
-    output_dir.mkdir(exist_ok=True)
-    plt.savefig(
-        output_dir / "portfolio_performance_overlay.png", dpi=300, bbox_inches="tight"
-    )
-    plt.close()
+        final_return = performance[timestamps[-1]]
+        all_final_returns.append(final_return)
 
     return all_final_returns
 
 
 def calculate_percentiles(returns_array: np.ndarray) -> Dict[str, float]:
     """Calculate percentile statistics for returns."""
-    percentiles = [10, 20, 40, 60, 80, 90]
+    percentiles = [25, 50, 75]
     return {
-        f"percentile_{p}_worst": float(np.percentile(returns_array, p) * 100)
+        f"percentile_{p}": float(np.percentile(returns_array, p) * 100)
         for p in percentiles
     }
 
 
 def calculate_performance_statistics(
     all_final_returns: List[float],
+    all_fee_returns: List[float] = None,
+    all_il_returns: List[float] = None,
 ) -> Dict[str, float]:
     """Calculate performance statistics."""
     if not all_final_returns:
@@ -607,17 +525,37 @@ def calculate_performance_statistics(
     returns_pct = returns_array * 100
 
     stats = {
-        "mean_return_pct": float(np.mean(returns_pct)),
-        "median_return_pct": float(np.median(returns_pct)),
-        "std_return_pct": float(np.std(returns_pct)),
-        "min_return_pct": float(np.min(returns_pct)),
-        "max_return_pct": float(np.max(returns_pct)),
-        "positive_periods": int(np.sum(returns_array > 0)),
-        "total_periods": len(returns_array),
+        "total_returns": {
+            "mean_return_pct": float(np.mean(returns_pct)),
+            "median_return_pct": float(np.median(returns_pct)),
+            "std_return_pct": float(np.std(returns_pct)),
+            "positive_periods": int(np.sum(returns_array > 0)),
+            "total_periods": len(returns_array),
+        }
     }
 
-    # Add percentiles
-    stats.update(calculate_percentiles(returns_array))
+    # Add percentiles for total returns
+    stats["total_returns"].update(calculate_percentiles(returns_array))
+
+    # Add fee component statistics
+    if all_fee_returns:
+        fee_array = np.array(all_fee_returns)
+        fee_pct = fee_array * 100
+        stats["fee_returns"] = {
+            "mean_return_pct": float(np.mean(fee_pct)),
+            "median_return_pct": float(np.median(fee_pct)),
+        }
+        stats["fee_returns"].update(calculate_percentiles(fee_array))
+
+    # Add impermanent loss component statistics
+    if all_il_returns:
+        il_array = np.array(all_il_returns)
+        il_pct = il_array * 100
+        stats["il_returns"] = {
+            "mean_return_pct": float(np.mean(il_pct)),
+            "median_return_pct": float(np.median(il_pct)),
+        }
+        stats["il_returns"].update(calculate_percentiles(il_array))
 
     return stats
 
@@ -626,23 +564,21 @@ def main() -> None:
     """Main execution function."""
     print("=== DeFi LP Portfolio Simulation ===\n")
 
-    # 1. Fetch top protocols
-    top_protocols = fetch_top_protocols(TOP_N_PROTOCOLS)
-    protocol_slugs = [p["slug"] for p in top_protocols]
+    # 1. Get top EVM chains
+    top_chains = get_top_evm_chains()
 
     # 2. Fetch historical data
-    print("\nFetching historical TVL data...")
-    protocol_tvls = {}
-    for slug in protocol_slugs:
-        print(f"Fetching data for {slug}...")
-        protocol_data = fetch_protocol_history(slug)
-        tvl_series = extract_total_tvl_series(protocol_data)
+    print("\nFetching historical TVL data per chain...")
+    chain_tvls = {}
+    for chain in top_chains:
+        print(f"Fetching data for {chain}...")
+        tvl_series = fetch_chain_history(chain)
         if tvl_series:
             # Apply forward-fill to handle missing data points
             filled_series = forward_fill_tvl_data(tvl_series)
-            protocol_tvls[slug] = filled_series
+            chain_tvls[chain] = filled_series
 
-    print(f"Successfully fetched data for {len(protocol_tvls)} protocols")
+    print(f"Successfully fetched data for {len(chain_tvls)} chains")
 
     # 3. Fetch global TVL history
     global_tvl = fetch_global_tvl_history()
@@ -653,35 +589,53 @@ def main() -> None:
 
     # 4. Calculate TVL shares using global TVL
     start_date = datetime.now() - timedelta(days=ANALYSIS_MONTHS * 30)
-    tvl_shares = calculate_tvl_shares(protocol_tvls, global_tvl, start_date)
+    tvl_shares = calculate_tvl_shares(chain_tvls, global_tvl, start_date)
 
     # 5. Run portfolio simulation
-    portfolio_performances, _ = run_portfolio_simulation(
-        list(protocol_tvls.keys()), tvl_shares, start_date
+    portfolio_performances, fee_performances, il_performances = (
+        run_portfolio_simulation(list(chain_tvls.keys()), tvl_shares, start_date)
     )
 
-    # 6. Apply interest rate discounting
-    discounted_performances = apply_interest_rate_discount(portfolio_performances)
-
-    # 7. Plot results
-    final_returns = plot_portfolio_performance(discounted_performances)
+    # 6. Extract final returns for each component
+    final_returns = extract_final_returns(portfolio_performances)
+    final_fee_returns = extract_final_returns(fee_performances)
+    final_il_returns = extract_final_returns(il_performances)
 
     # 8. Calculate and save statistics
-    stats = calculate_performance_statistics(final_returns)
+    stats = calculate_performance_statistics(
+        final_returns, final_fee_returns, final_il_returns
+    )
 
     print("\n=== PERFORMANCE STATISTICS ===")
-    print(f"Mean Return: {stats.get('mean_return_pct', 0):.2f}%")
-    print(f"Median Return: {stats.get('median_return_pct', 0):.2f}%")
-    # print(f"Standard Deviation: {stats.get('std_return_pct', 0):.2f}%")
-    print(f"10th Percentile (worst): {stats.get('percentile_10_worst', 0):.2f}%")
-    print(f"20th Percentile: {stats.get('percentile_20_worst', 0):.2f}%")
-    print(f"40th Percentile: {stats.get('percentile_40_worst', 0):.2f}%")
-    print(f"60th Percentile: {stats.get('percentile_60_worst', 0):.2f}%")
-    print(f"80th Percentile: {stats.get('percentile_80_worst', 0):.2f}%")
-    print(f"90th Percentile: {stats.get('percentile_90_worst', 0):.2f}%")
+
+    # Total returns
+    total_stats = stats.get("total_returns", {})
+    print("\nTOTAL RETURNS:")
+    print(f"Mean: {total_stats.get('mean_return_pct', 0):.2f}%")
+    print(f"25th Percentile: {total_stats.get('percentile_25', 0):.2f}%")
+    print(f"50th Percentile (Median): {total_stats.get('percentile_50', 0):.2f}%")
+    print(f"75th Percentile: {total_stats.get('percentile_75', 0):.2f}%")
     print(
-        f"Positive Periods: {stats.get('positive_periods', 0)}/{stats.get('total_periods', 0)}"
+        f"Positive Periods: {total_stats.get('positive_periods', 0)}/{total_stats.get('total_periods', 0)}"
     )
+
+    # Fee component
+    if "fee_returns" in stats:
+        fee_stats = stats["fee_returns"]
+        print("\nFEE COMPONENT:")
+        print(f"Mean: {fee_stats.get('mean_return_pct', 0):.2f}%")
+        print(f"25th Percentile: {fee_stats.get('percentile_25', 0):.2f}%")
+        print(f"50th Percentile (Median): {fee_stats.get('percentile_50', 0):.2f}%")
+        print(f"75th Percentile: {fee_stats.get('percentile_75', 0):.2f}%")
+
+    # Impermanent Loss component
+    if "il_returns" in stats:
+        il_stats = stats["il_returns"]
+        print("\nIMPERMANENT LOSS COMPONENT:")
+        print(f"Mean: {il_stats.get('mean_return_pct', 0):.2f}%")
+        print(f"25th Percentile: {il_stats.get('percentile_25', 0):.2f}%")
+        print(f"50th Percentile (Median): {il_stats.get('percentile_50', 0):.2f}%")
+        print(f"75th Percentile: {il_stats.get('percentile_75', 0):.2f}%")
 
     # Save results
     output_dir = Path("portfolio_results")
@@ -689,17 +643,19 @@ def main() -> None:
 
     results = {
         "configuration": {
-            "top_n_protocols": TOP_N_PROTOCOLS,
+            "chains": TOP_EVM_CHAINS,
             "analysis_months": ANALYSIS_MONTHS,
             "simulation_period_days": SIMULATION_PERIOD_DAYS,
-            "annual_interest_rate": ANNUAL_INTEREST_RATE,
+            "daily_fee_rate": DAILY_FEE_RATE,
             "withdrawal_enabled": WITHDRAWAL_ENABLED,
             "withdrawal_timing_pct": WITHDRAWAL_TIMING_PCT,
             "withdrawal_amount_pct": WITHDRAWAL_AMOUNT_PCT,
         },
-        "protocols_analyzed": list(protocol_tvls.keys()),
+        "chains_analyzed": list(chain_tvls.keys()),
         "statistics": stats,
         "final_returns": final_returns,
+        "final_fee_returns": final_fee_returns,
+        "final_il_returns": final_il_returns,
     }
 
     with open(output_dir / "simulation_results.json", "w") as f:
