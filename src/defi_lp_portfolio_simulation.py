@@ -330,9 +330,9 @@ def calculate_chain_contribution(
             # Calculate return components (each chain starts with 1000 investment)
             total_return = total_value / 1000.0 - 1
             fee_return = fees / 1000.0
-            # IL return is everything except fees: (pool + external - initial) / initial - fee_return
+            # IL return is everything except fees: (pool + external - initial) / initial
             portfolio_value_no_fees = pool_values[t] + external_value
-            il_return = (portfolio_value_no_fees / 1000.0 - 1) - fee_return
+            il_return = portfolio_value_no_fees / 1000.0 - 1
 
             total_contributions[t] = total_return
             fee_contributions[t] = fee_return
