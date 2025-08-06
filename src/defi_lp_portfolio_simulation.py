@@ -3,10 +3,10 @@
 LP Portfolio Simulation Script
 
 This script:
-1. Fetches top N DeFi protocols from DeFiLlama
-2. Calculates historical TVL share of each protocol over 24 months
+1. Fetches top N DeFi chains from DeFiLlama
+2. Uses historical absolute TVL of each chain over 24 months
 3. Simulates UP/DOWN token liquidity pool performance
-4. Graphs portfolio performance with opportunity cost adjustment
+4. Analyzes portfolio performance based on absolute TVL changes
 """
 
 from __future__ import annotations
@@ -116,16 +116,6 @@ def find_latest_timestamp(timestamps: List[int], target: int) -> int:
     return max(available) if available else None
 
 
-def fetch_global_tvl_history() -> Dict[int, float]:
-    """Fetch global DeFi TVL history from DeFiLlama (excludes liquid staking and double counted TVL)."""
-    print("Fetching global DeFi TVL history...")
-    cache_file = Path("cache") / "global_tvl_history.json"
-    data = cached_api_fetch("https://api.llama.fi/v2/historicalChainTvl", cache_file)
-
-    if not data:
-        return {}
-
-    return {int(entry["date"]): float(entry["tvl"]) for entry in data}
 
 
 def get_tvl_at_timestamp(tvl_data: Dict[int, float], timestamp: int) -> float:
@@ -134,70 +124,31 @@ def get_tvl_at_timestamp(tvl_data: Dict[int, float], timestamp: int) -> float:
     return tvl_data[latest_time] if latest_time else 0.0
 
 
-def calculate_chain_share_at_timestamp(
+
+
+def prepare_chain_tvl_data(
     chain_tvls: Dict[str, Dict[int, float]],
-    global_tvl: Dict[int, float],
-    timestamp: int,
-) -> Dict[str, float]:
-    """Calculate each chain's share at a specific timestamp."""
-    total_global_tvl = get_tvl_at_timestamp(global_tvl, timestamp)
-    if total_global_tvl <= 0:
-        return {}
-
-    return {
-        chain: max(0, get_tvl_at_timestamp(tvl_data, timestamp) / total_global_tvl)
-        for chain, tvl_data in chain_tvls.items()
-    }
-
-
-def calculate_tvl_shares(
-    chain_tvls: Dict[str, Dict[int, float]],
-    global_tvl: Dict[int, float],
     start_date: datetime,
 ) -> Dict[str, Dict[int, float]]:
-    """Calculate each chain's share of global DeFi TVL over time."""
-    print("Calculating TVL shares per chain using global DeFi TVL...")
-
-    # Get analysis timestamps
-    all_timestamps = set()
-    for tvl_data in chain_tvls.values():
-        all_timestamps.update(tvl_data.keys())
-    all_timestamps.update(global_tvl.keys())
-
+    """Prepare chain TVL data by filtering to analysis period."""
+    print("Preparing chain TVL data for analysis period...")
+    
     start_timestamp = int(start_date.timestamp())
-    analysis_timestamps = sorted(t for t in all_timestamps if t >= start_timestamp)
-    print(f"Found {len(analysis_timestamps)} timestamps in analysis period")
-
-    # Initialize shares for all chains
-    tvl_shares = {chain: {} for chain in chain_tvls.keys()}
-
-    for timestamp in analysis_timestamps:
-        shares_at_t = calculate_chain_share_at_timestamp(
-            chain_tvls, global_tvl, timestamp
-        )
-
-        for chain in chain_tvls.keys():
-            if chain in shares_at_t:
-                tvl_shares[chain][timestamp] = shares_at_t[chain]
-            else:
-                # Forward-fill from previous timestamp
-                prev_time = find_latest_timestamp(
-                    list(tvl_shares[chain].keys()), timestamp - 1
-                )
-                tvl_shares[chain][timestamp] = (
-                    tvl_shares[chain][prev_time] if prev_time else 0.0
-                )
-
-    # Print debug info
-    for chain in tvl_shares:
-        print(f"{chain}: {len(tvl_shares[chain])} data points")
-
-    return tvl_shares
+    filtered_tvls = {}
+    
+    for chain, tvl_data in chain_tvls.items():
+        # Filter to analysis period
+        filtered_data = {t: tvl for t, tvl in tvl_data.items() if t >= start_timestamp}
+        if filtered_data:
+            filtered_tvls[chain] = filtered_data
+            print(f"{chain}: {len(filtered_data)} data points")
+    
+    return filtered_tvls
 
 
-def calculate_token_prices(share_ratio: float) -> Tuple[float, float]:
-    """Calculate UP and DOWN token prices based on TVL share performance."""
-    up_price = min(0.99, max(0.01, 0.5 * share_ratio))
+def calculate_token_prices(tvl_ratio: float) -> Tuple[float, float]:
+    """Calculate UP and DOWN token prices based on TVL performance ratio."""
+    up_price = min(0.99, max(0.01, 0.5 * tvl_ratio))
     return up_price, 1.0 - up_price
 
 
@@ -226,16 +177,15 @@ def calculate_pool_value(k: float, up_price: float, down_price: float) -> float:
 
 def simulate_lp_pool(
     chain: str,
-    tvl_shares: Dict[int, float],
+    chain_tvls: Dict[str, Dict[int, float]],
     start_timestamp: int,
     end_timestamp: int,
-    initial_value: float = 1000,
 ) -> Tuple[Dict[int, float], Dict[int, Tuple[float, float]], float]:
     """Simulate UP/DOWN token LP pool for one chain over one period."""
-    if chain not in tvl_shares:
+    if chain not in chain_tvls:
         return {}, {}, 0.0
 
-    chain_data = tvl_shares[chain]
+    chain_data = chain_tvls[chain]
     available_times = [
         t for t in chain_data.keys() if start_timestamp <= t <= end_timestamp
     ]
@@ -244,8 +194,8 @@ def simulate_lp_pool(
     if len(available_times) < 2:
         return {}, {}, 0.0
 
-    start_share = chain_data[available_times[0]]
-    if start_share <= 0:
+    start_tvl = chain_data[available_times[0]]
+    if start_tvl <= 0:
         return {}, {}, 0.0
 
     # Initialize pool state
@@ -263,9 +213,9 @@ def simulate_lp_pool(
     external_holdings = {}
 
     for timestamp in available_times:
-        current_share = chain_data[timestamp]
-        share_ratio = current_share / start_share
-        up_price, down_price = calculate_token_prices(share_ratio)
+        current_tvl = chain_data[timestamp]
+        tvl_ratio = current_tvl / start_tvl
+        up_price, down_price = calculate_token_prices(tvl_ratio)
 
         # Calculate fees based on days elapsed since last update
         days_elapsed = (timestamp - last_timestamp) / 86400
@@ -301,7 +251,7 @@ def calculate_chain_contribution(
     chain: str,
     pool_values: Dict[int, float],
     external_holdings: Dict[int, Tuple[float, float]],
-    tvl_shares: Dict[str, Dict[int, float]],
+    chain_tvls: Dict[str, Dict[int, float]],
     timestamps: List[int],
     fees: float,
 ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
@@ -311,14 +261,14 @@ def calculate_chain_contribution(
     total_contributions = {}
     fee_contributions = {}
     il_contributions = {}
-    start_share = tvl_shares[chain][timestamps[0]]
+    start_tvl = chain_tvls[chain][timestamps[0]]
 
     for t in timestamps:
-        if t in pool_values and chain in tvl_shares and t in tvl_shares[chain]:
+        if t in pool_values and chain in chain_tvls and t in chain_tvls[chain]:
             # Calculate token prices at this timestamp
-            current_share = tvl_shares[chain][t]
-            share_ratio = current_share / start_share
-            up_price, down_price = calculate_token_prices(share_ratio)
+            current_tvl = chain_tvls[chain][t]
+            tvl_ratio = current_tvl / start_tvl
+            up_price, down_price = calculate_token_prices(tvl_ratio)
 
             # Value of external holdings
             ext_up, ext_down = external_holdings[t]
@@ -343,24 +293,26 @@ def calculate_chain_contribution(
 
 def simulate_single_period(
     chains: List[str],
-    tvl_shares: Dict[str, Dict[int, float]],
+    chain_tvls: Dict[str, Dict[int, float]],
     start_timestamp: int,
     end_timestamp: int,
-    period_key: str,
     debug: bool = False,
-) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
+) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict[str, Dict[str, float]]]:
     """Simulate portfolio for a single period.
-    Returns: (total_portfolio_value, fee_portfolio_value, il_portfolio_value)
+    Returns: (total_portfolio_value, fee_portfolio_value, il_portfolio_value, debug_info)
     """
     portfolio_value = {}
     fee_portfolio_value = {}
     il_portfolio_value = {}
     chains_with_data_at_timestamp = {}
     successful_chains = 0
+    
+    # Track debug info for UP price changes
+    debug_info = {}
 
     for chain in chains:
         pool_values, external_holdings, fees = simulate_lp_pool(
-            chain, tvl_shares, start_timestamp, end_timestamp
+            chain, chain_tvls, start_timestamp, end_timestamp
         )
 
         if not pool_values:
@@ -373,9 +325,35 @@ def simulate_single_period(
         successful_chains += 1
         total_contributions, fee_contributions, il_contributions = (
             calculate_chain_contribution(
-                chain, pool_values, external_holdings, tvl_shares, timestamps, fees
+                chain, pool_values, external_holdings, chain_tvls, timestamps, fees
             )
         )
+        
+        # Track UP:DOWN price ratio changes for debugging
+        if timestamps:
+            start_tvl = chain_tvls[chain][timestamps[0]]
+            end_tvl = chain_tvls[chain][timestamps[-1]]
+            start_ratio = 1.0  # Initial ratio is 1.0
+            end_ratio = end_tvl / start_tvl
+            start_up_price, start_down_price = calculate_token_prices(start_ratio)
+            end_up_price, end_down_price = calculate_token_prices(end_ratio)
+            
+            # Calculate UP:DOWN price ratio change
+            start_price_ratio = start_up_price / start_down_price
+            end_price_ratio = end_up_price / end_down_price
+            price_ratio_change = (end_price_ratio - start_price_ratio) / start_price_ratio
+            
+            debug_info[chain] = {
+                'up_down_ratio_change_pct': price_ratio_change * 100,
+                'start_up_price': start_up_price,
+                'end_up_price': end_up_price,
+                'start_price_ratio': start_price_ratio,
+                'end_price_ratio': end_price_ratio,
+                'start_tvl': start_tvl,
+                'end_tvl': end_tvl,
+                'tvl_change_pct': (end_tvl - start_tvl) / start_tvl * 100,
+                'il_return_pct': il_contributions[timestamps[-1]] * 100 if timestamps[-1] in il_contributions else 0
+            }
 
         # Add to portfolio
         for t in total_contributions:
@@ -398,8 +376,8 @@ def simulate_single_period(
                     for ext, price in zip(
                         external_holdings[timestamps[-1]],
                         calculate_token_prices(
-                            tvl_shares[chain][timestamps[-1]]
-                            / tvl_shares[chain][timestamps[0]]
+                            chain_tvls[chain][timestamps[-1]]
+                            / chain_tvls[chain][timestamps[0]]
                         ),
                     )
                 )
@@ -420,21 +398,26 @@ def simulate_single_period(
         print(
             f"  Period summary: {successful_chains} chains, portfolio return: {(final_return*100):.2f}%"
         )
+        # Show UP:DOWN ratio change summary for this period
+        if debug_info:
+            avg_ratio_change = np.mean([info['up_down_ratio_change_pct'] for info in debug_info.values()])
+            print(f"  Average UP:DOWN ratio change: {avg_ratio_change:.2f}%")
     elif debug:
-        print(f"  No successful chains in {period_key}")
+        print(f"  No successful chains in this period")
 
-    return portfolio_value, fee_portfolio_value, il_portfolio_value
+    return portfolio_value, fee_portfolio_value, il_portfolio_value, debug_info
 
 
 def run_portfolio_simulation(
-    chains: List[str], tvl_shares: Dict[str, Dict[int, float]], start_date: datetime
+    chains: List[str], chain_tvls: Dict[str, Dict[int, float]], start_date: datetime
 ) -> Tuple[
     Dict[str, Dict[int, float]],
     Dict[str, Dict[int, float]],
     Dict[str, Dict[int, float]],
+    Dict[str, Dict[str, Dict[str, float]]],
 ]:
     """Run portfolio simulation with overlapping 1-month periods.
-    Returns: (total_performances, fee_performances, il_performances)
+    Returns: (total_performances, fee_performances, il_performances, all_debug_info)
     """
     print(
         f"Running overlapping portfolio simulations (periods spaced {PERIOD_SPACING_DAYS} days apart)..."
@@ -443,6 +426,7 @@ def run_portfolio_simulation(
     portfolio_performances = {}
     fee_performances = {}
     il_performances = {}
+    all_debug_info = {}
 
     # Generate date ranges for overlapping periods
     current_date = start_date
@@ -461,24 +445,24 @@ def run_portfolio_simulation(
         end_timestamp = int(period_end.timestamp())
 
         # Simulate this period
-        portfolio_value, fee_value, il_value = simulate_single_period(
+        portfolio_value, fee_value, il_value, debug_info = simulate_single_period(
             chains,
-            tvl_shares,
+            chain_tvls,
             start_timestamp,
             end_timestamp,
-            period_key,
             debug=(period_count < 3),
         )
 
         portfolio_performances[period_key] = portfolio_value
         fee_performances[period_key] = fee_value
         il_performances[period_key] = il_value
+        all_debug_info[period_key] = debug_info
 
         current_date += timedelta(days=PERIOD_SPACING_DAYS)
         period_count += 1
 
     print(f"Generated {period_count} overlapping 1-month periods")
-    return portfolio_performances, fee_performances, il_performances
+    return portfolio_performances, fee_performances, il_performances, all_debug_info
 
 
 def to_percentage(decimal_values: List[float]) -> List[float]:
@@ -580,20 +564,13 @@ def main() -> None:
 
     print(f"Successfully fetched data for {len(chain_tvls)} chains")
 
-    # 3. Fetch global TVL history
-    global_tvl = fetch_global_tvl_history()
-    if not global_tvl:
-        print(
-            "Warning: Failed to fetch global TVL data, calculations may be inaccurate"
-        )
-
-    # 4. Calculate TVL shares using global TVL
+    # 3. Prepare chain TVL data for analysis
     start_date = datetime.now() - timedelta(days=ANALYSIS_MONTHS * 30)
-    tvl_shares = calculate_tvl_shares(chain_tvls, global_tvl, start_date)
+    chain_tvls = prepare_chain_tvl_data(chain_tvls, start_date)
 
-    # 5. Run portfolio simulation
-    portfolio_performances, fee_performances, il_performances = (
-        run_portfolio_simulation(list(chain_tvls.keys()), tvl_shares, start_date)
+    # 4. Run portfolio simulation
+    portfolio_performances, fee_performances, il_performances, debug_info = (
+        run_portfolio_simulation(list(chain_tvls.keys()), chain_tvls, start_date)
     )
 
     # 6. Extract final returns for each component
@@ -605,6 +582,43 @@ def main() -> None:
     stats = calculate_performance_statistics(
         final_returns, final_fee_returns, final_il_returns
     )
+    
+    # Debug: Analyze UP:DOWN price ratio changes vs IL
+    print("\n=== DEBUGGING: UP:DOWN PRICE RATIO CHANGES VS IL ===")
+    all_ratio_changes = []
+    all_il_returns = []
+    
+    for _, period_debug in debug_info.items():
+        for chain, chain_debug in period_debug.items():
+            all_ratio_changes.append(chain_debug['up_down_ratio_change_pct'])
+            all_il_returns.append(chain_debug['il_return_pct'])
+    
+    if all_ratio_changes:
+        avg_ratio_change = np.mean(all_ratio_changes)
+        std_ratio_change = np.std(all_ratio_changes)
+        avg_il = np.mean(all_il_returns)
+        std_il = np.std(all_il_returns)
+        
+        print(f"Average UP:DOWN ratio change: {avg_ratio_change:.2f}% (std: {std_ratio_change:.2f}%)")
+        print(f"Average IL return: {avg_il:.2f}% (std: {std_il:.2f}%)")
+        
+        # Show some example periods
+        print("\nSample periods (first 10):")
+        sample_periods = list(debug_info.keys())[:10]
+        for period in sample_periods:
+            period_debug = debug_info[period]
+            if period_debug:
+                chain = list(period_debug.keys())[0]  # Show first chain as example
+                chain_debug = period_debug[chain]
+                print(f"{period}, {chain}:")
+                start_tvl_b = chain_debug['start_tvl'] / 1e9
+                end_tvl_b = chain_debug['end_tvl'] / 1e9
+                print(f"  TVL: ${start_tvl_b:.2f}B → ${end_tvl_b:.2f}B ({chain_debug['tvl_change_pct']:.2f}%)")
+                print(f"  UP:DOWN ratio change: {chain_debug['up_down_ratio_change_pct']:.2f}%, IL: {chain_debug['il_return_pct']:.2f}%")
+                
+        # Calculate theoretical IL for comparison
+        print("\nNote: 'IL' here represents portfolio value change (excluding fees)")
+        print("Token prices are calculated based on absolute TVL changes rather than market share changes.")
 
     print("\n=== PERFORMANCE STATISTICS ===")
 
@@ -656,6 +670,7 @@ def main() -> None:
         "final_returns": final_returns,
         "final_fee_returns": final_fee_returns,
         "final_il_returns": final_il_returns,
+        "debug_ratio_changes": all_ratio_changes[:100] if all_ratio_changes else [],  # Save first 100 for analysis
     }
 
     with open(output_dir / "simulation_results.json", "w") as f:
@@ -663,7 +678,6 @@ def main() -> None:
 
     print(f"\nResults saved to portfolio_results/")
     print("- simulation_results.json: Detailed statistics and data")
-    print("- portfolio_performance_overlay.png: Performance visualization")
 
 
 if __name__ == "__main__":
