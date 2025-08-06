@@ -249,6 +249,7 @@ class LPPoolSimulator:
         withdrawal_executed = False
         accumulated_fees = 0.0
         last_timestamp = available_times[0]
+        last_up_price, last_down_price = None, None
 
         period_duration = end_timestamp - start_timestamp
         withdrawal_timestamp = start_timestamp + (
@@ -264,9 +265,17 @@ class LPPoolSimulator:
             up_price, down_price = self.calculate_token_prices(tvl_ratio)
 
             accumulated_fees += self._calculate_period_fees(
-                k, up_price, down_price, timestamp, last_timestamp
+                k,
+                up_price,
+                down_price,
+                timestamp,
+                last_timestamp,
+                last_up_price,
+                last_down_price,
             )
             last_timestamp = timestamp
+            last_up_price = up_price
+            last_down_price = down_price
 
             if self._should_execute_withdrawal(
                 withdrawal_executed, timestamp, withdrawal_timestamp
@@ -290,14 +299,31 @@ class LPPoolSimulator:
         down_price: float,
         timestamp: int,
         last_timestamp: int,
+        last_up_price: float = None,
+        last_down_price: float = None,
     ) -> float:
-        """Calculate fees for the time period."""
+        """Calculate fees for the time period based on implied trade volume."""
         days_elapsed = (timestamp - last_timestamp) / 86400
-        if days_elapsed <= 0:
+        if days_elapsed <= 0 or last_up_price is None or last_down_price is None:
             return 0.0
 
-        current_pool_value = self.calculate_pool_value(k, up_price, down_price)
-        return current_pool_value * self.config.daily_fee_rate * days_elapsed
+        # Calculate token amounts at current prices
+        up_tokens = np.sqrt(k * down_price / up_price)
+        down_tokens = np.sqrt(k * up_price / down_price)
+
+        # Calculate what token amounts would have been at last prices with same k
+        last_up_tokens = np.sqrt(k * last_down_price / last_up_price)
+        last_down_tokens = np.sqrt(k * last_up_price / last_down_price)
+
+        # Calculate the implied trade volume (absolute change in token amounts)
+        up_volume = abs(up_tokens - last_up_tokens) * up_price
+        down_volume = abs(down_tokens - last_down_tokens) * down_price
+
+        # Total trade volume is the average of both sides (since trades affect both tokens)
+        total_trade_volume = (up_volume + down_volume) / 2
+
+        # Apply fee rate to the trade volume
+        return total_trade_volume * self.config.daily_fee_rate
 
     def _should_execute_withdrawal(
         self, withdrawal_executed: bool, timestamp: int, withdrawal_timestamp: int
@@ -766,9 +792,6 @@ class SimulationWorkflow:
 
             print(
                 "\nNote: 'IL' here represents portfolio value change (excluding fees)"
-            )
-            print(
-                "Token prices are calculated based on absolute TVL changes rather than market share changes."
             )
 
     def _print_performance_statistics(self, stats: Dict) -> None:
