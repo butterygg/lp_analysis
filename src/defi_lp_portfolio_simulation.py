@@ -28,7 +28,7 @@ class SimulationConfig:
     analysis_months: int = 24
     simulation_period_days: int = 30
     period_spacing_days: int = 1
-    daily_fee_rate: float = 0.003
+    fee_rate: float = 0.003
     withdrawal_enabled: bool = True
     withdrawal_timing_pct: float = 0.25
     withdrawal_amount_pct: float = 0.7
@@ -37,10 +37,10 @@ class SimulationConfig:
         if self.top_evm_chains is None:
             self.top_evm_chains = [
                 "Ethereum",
-                "BSC",
                 "Base",
                 "Arbitrum",
-                "Avalanche",
+                # "BSC",
+                # "Avalanche",
             ]
 
 
@@ -323,7 +323,7 @@ class LPPoolSimulator:
         total_trade_volume = (up_volume + down_volume) / 2
 
         # Apply fee rate to the trade volume
-        return total_trade_volume * self.config.daily_fee_rate
+        return total_trade_volume * self.config.fee_rate
 
     def _should_execute_withdrawal(
         self, withdrawal_executed: bool, timestamp: int, withdrawal_timestamp: int
@@ -846,7 +846,7 @@ class SimulationWorkflow:
                 "chains": self.config.top_evm_chains,
                 "analysis_months": self.config.analysis_months,
                 "simulation_period_days": self.config.simulation_period_days,
-                "daily_fee_rate": self.config.daily_fee_rate,
+                "fee_rate": self.config.fee_rate,
                 "withdrawal_enabled": self.config.withdrawal_enabled,
                 "withdrawal_timing_pct": self.config.withdrawal_timing_pct,
                 "withdrawal_amount_pct": self.config.withdrawal_amount_pct,
