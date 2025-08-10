@@ -49,51 +49,26 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - Contributes additional negative returns averaging -5.01% per period
 
 ## Results
-
-![Portfolio Return Distributions](lp_returns/return_distributions.png)
+- Important: Take note of the mean and median total returns in the below reports
 
 ### Aggregated Portfolio Performance
-**Total Returns (21-day periods)**
-- Mean: -13.79%  
-
-**Fee Component**  
-- Mean: +0.09%  
-
-**Impermanent Loss Component**  
-- Mean: -8.87%  
-
-**External Token Component**
-- Mean: -5.01%
+(corresponds to making an initial equal allocation to each pool)
+![Portfolio Return Distributions](lp_returns/return_distributions.png)
 
 ### Individual Chain Performance
 
+#### Arbitrum pool returns
 ![Arbitrum Return Distributions](lp_returns/arbitrum_return_distributions.png)
 
-**Arbitrum** (Best performing chain)
-- Average Total Returns: -9.88%
-- Average Fee Returns: +0.10%
-- Average IL Returns: -9.16%
-- Average External Returns: -0.81%
-
+#### Base pool returns
 ![Base Return Distributions](lp_returns/base_return_distributions.png)
 
-**Base** (Moderate performance)
-- Average Total Returns: -11.49%
-- Average Fee Returns: +0.09%
-- Average IL Returns: -4.88%
-- Average External Returns: -6.70%
-
+#### Unichain pool returns
 ![Unichain Return Distributions](lp_returns/unichain_return_distributions.png)
 
-**Unichain** (Highest volatility)
-- Average Total Returns: -28.71%
-- Average Fee Returns: +0.10%
-- Average IL Returns: -16.85%
-- Average External Returns: -11.96%
-
 ## Notes & Observations
-2. **Chain diversification matters**: Portfolio approach reduces risk compared to single-chain exposure, with Arbitrum showing the best individual performance
-3. **Unichain volatility**: Shows highest returns volatility and worst performance, reflecting its newer status and higher TVL fluctuations
+- **Chain diversification matters**: Portfolio approach reduces risk compared to single-chain exposure, with Arbitrum showing the best individual performance
+- **Unichain volatility**: Shows highest returns volatility and worst performance, reflecting its newer status and higher TVL fluctuations
 - **Conservative fee estimates**: Actual trading frequency may be higher than daily, potentially improving fee revenue
 
 ## Technical Implementation
