@@ -295,19 +295,13 @@ class LPPoolSimulator:
 
         # virtual token amounts now vs then
         up_now = np.sqrt(k * price_down / price_up)
-        down_now = np.sqrt(k * price_up / price_down)
         up_prev = np.sqrt(k * prev_down / prev_up)
-        down_prev = np.sqrt(k * prev_up / prev_down)
 
         # Check for invalid values
-        if np.any(np.isnan([up_now, down_now, up_prev, down_prev])) or np.any(
-            np.isinf([up_now, down_now, up_prev, down_prev])
-        ):
+        if np.any(np.isnan([up_now, up_prev])) or np.any(np.isinf([up_now, up_prev])):
             return 0.0
 
-        volume_usd = (
-            abs(up_now - up_prev) * price_up + abs(down_now - down_prev) * price_down
-        ) / 2.0
+        volume_usd = (abs(up_now - up_prev) * price_up) / 2.0
         return volume_usd * self.cfg.fee_rate
 
     def _should_withdraw(self, ts: int, already_withdrew: bool, target_ts: int) -> bool:

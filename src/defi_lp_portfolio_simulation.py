@@ -86,16 +86,30 @@ class MultiChainPortfolio(PortfolioAnalyzer):
         span_start_ts: int,
         span_end_ts: int,
         debug: bool = False,
-    ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict]:
+    ) -> Tuple[
+        Dict[int, float],
+        Dict[int, float],
+        Dict[int, float],
+        Dict,
+        Dict[str, Dict[int, float]],
+        Dict[str, Dict[int, float]],
+        Dict[str, Dict[int, float]],
+    ]:
         """
-        Aggregate every chain’s returns for the span,
+        Aggregate every chain's returns for the span,
         normalising by number of participating chains at each timestamp.
+        Also returns individual chain results.
         """
         aggregate: Dict[int, float] = {}
         aggregate_fee: Dict[int, float] = {}
         aggregate_il: Dict[int, float] = {}
         contributors: Dict[int, int] = {}
         dbg: Dict[str, Dict] = {}
+
+        # Store individual chain results
+        chain_totals: Dict[str, Dict[int, float]] = {}
+        chain_fees: Dict[str, Dict[int, float]] = {}
+        chain_ils: Dict[str, Dict[int, float]] = {}
 
         for chain in repo.chains():
             tvl_series = repo.tvl(chain)
@@ -112,6 +126,11 @@ class MultiChainPortfolio(PortfolioAnalyzer):
             if not tot:
                 continue
 
+            # Store individual chain results
+            chain_totals[chain] = tot
+            chain_fees[chain] = fee
+            chain_ils[chain] = il
+
             for ts in tot:
                 aggregate[ts] = aggregate.get(ts, 0) + tot[ts]
                 aggregate_fee[ts] = aggregate_fee.get(ts, 0) + fee[ts]
@@ -125,7 +144,15 @@ class MultiChainPortfolio(PortfolioAnalyzer):
             aggregate_fee[ts] /= count
             aggregate_il[ts] /= count
 
-        return aggregate, aggregate_fee, aggregate_il, dbg
+        return (
+            aggregate,
+            aggregate_fee,
+            aggregate_il,
+            dbg,
+            chain_totals,
+            chain_fees,
+            chain_ils,
+        )
 
 
 # ------------------------------------------------------------------ #
@@ -169,7 +196,9 @@ class SimulationWorkflow:
         self.repo.slice_since(start_date)
 
         # -------- rolling 1-month windows -------- #
-        perf, fee_perf, il_perf, dbg = self._run_overlapping_windows(start_date)
+        perf, fee_perf, il_perf, dbg, chain_totals, chain_fees, chain_ils = (
+            self._run_overlapping_windows(start_date)
+        )
 
         # -------- stats -------- #
         totals = self.analyser.extract_final_returns(perf)
@@ -177,15 +206,30 @@ class SimulationWorkflow:
         ils = self.analyser.extract_final_returns(il_perf)
         stats = self.analyser.summarise(totals, fees, ils)
 
+        # Calculate individual chain statistics
+        chain_stats = self._calculate_individual_chain_stats(
+            chain_totals, chain_fees, chain_ils
+        )
+
         self._pretty_print(stats)
-        return self._dump_json(stats, totals, fees, ils, dbg)
+        self._print_individual_chain_results(chain_stats)
+        self._print_portfolio_vs_individual_comparison(stats, chain_stats)
+        self._print_summary_table(stats, chain_stats)
+        return self._dump_json(stats, totals, fees, ils, dbg, chain_stats)
 
     # -------------------- internals -------------------- #
     def _run_overlapping_windows(
         self, first_window_start: datetime
-    ) -> Tuple[Dict, Dict, Dict, Dict]:
+    ) -> Tuple[
+        Dict, Dict, Dict, Dict, Dict[str, Dict], Dict[str, Dict], Dict[str, Dict]
+    ]:
         logger.info("Simulating rolling windows …")
         perf_total, perf_fee, perf_il, dbg_all = {}, {}, {}, {}
+        # Store individual chain results across all windows
+        chain_totals_all: Dict[str, Dict] = {}
+        chain_fees_all: Dict[str, Dict] = {}
+        chain_ils_all: Dict[str, Dict] = {}
+
         current = first_window_start
         last_start = first_window_start + timedelta(
             days=self.cfg.analysis_months * 30 - self.cfg.simulation_period_days
@@ -198,11 +242,13 @@ class SimulationWorkflow:
             if idx % 30 == 0:
                 logger.info("→ %s", key)
 
-            tot, fee, il, dbg = self.analyser.simulate_one_month_span(
-                self.repo,
-                int(current.timestamp()),
-                int(span_end.timestamp()),
-                debug=idx < 3,
+            tot, fee, il, dbg, chain_totals, chain_fees, chain_ils = (
+                self.analyser.simulate_one_month_span(
+                    self.repo,
+                    int(current.timestamp()),
+                    int(span_end.timestamp()),
+                    debug=idx < 3,
+                )
             )
             perf_total[key], perf_fee[key], perf_il[key], dbg_all[key] = (
                 tot,
@@ -210,10 +256,182 @@ class SimulationWorkflow:
                 il,
                 dbg,
             )
+
+            # Store individual chain results for this window
+            for chain in chain_totals:
+                if chain not in chain_totals_all:
+                    chain_totals_all[chain] = {}
+                    chain_fees_all[chain] = {}
+                    chain_ils_all[chain] = {}
+                chain_totals_all[chain][key] = chain_totals[chain]
+                chain_fees_all[chain][key] = chain_fees[chain]
+                chain_ils_all[chain][key] = chain_ils[chain]
+
             current += timedelta(days=self.cfg.period_spacing_days)
             idx += 1
         logger.info("✓ Generated %d windows", idx)
-        return perf_total, perf_fee, perf_il, dbg_all
+        return (
+            perf_total,
+            perf_fee,
+            perf_il,
+            dbg_all,
+            chain_totals_all,
+            chain_fees_all,
+            chain_ils_all,
+        )
+
+    def _calculate_individual_chain_stats(
+        self,
+        chain_totals: Dict[str, Dict[str, Dict[int, float]]],
+        chain_fees: Dict[str, Dict[str, Dict[int, float]]],
+        chain_ils: Dict[str, Dict[str, Dict[int, float]]],
+    ) -> Dict[str, Dict]:
+        """
+        Calculates individual chain statistics (e.g., total returns, fees, IL)
+        for each window across all chains.
+        """
+        chain_stats: Dict[str, Dict] = {}
+        for chain in chain_totals:
+            chain_stats[chain] = {}
+            for window_key in chain_totals[chain]:
+                chain_stats[chain][window_key] = {
+                    "total_returns": sum(chain_totals[chain][window_key].values()),
+                    "fee_returns": sum(chain_fees[chain][window_key].values()),
+                    "il_returns": sum(chain_ils[chain][window_key].values()),
+                }
+        return chain_stats
+
+    def _print_individual_chain_results(self, chain_stats: Dict[str, Dict]) -> None:
+        """
+        Prints individual chain statistics for each window.
+        """
+        logger.info("\n=== INDIVIDUAL CHAIN RESULTS ===")
+        for chain, windows in chain_stats.items():
+            logger.info("\nChain: %s", chain)
+
+            # Calculate summary statistics across all windows
+            all_total_returns = [stats["total_returns"] for stats in windows.values()]
+            all_fee_returns = [stats["fee_returns"] for stats in windows.values()]
+            all_il_returns = [stats["il_returns"] for stats in windows.values()]
+
+            logger.info("  Summary across all windows:")
+            logger.info(
+                "    Total Returns: avg=%.4f, min=%.4f, max=%.4f",
+                np.mean(all_total_returns),
+                np.min(all_total_returns),
+                np.max(all_total_returns),
+            )
+            logger.info(
+                "    Fee Returns:  avg=%.4f, min=%.4f, max=%.4f",
+                np.mean(all_fee_returns),
+                np.min(all_fee_returns),
+                np.max(all_fee_returns),
+            )
+            logger.info(
+                "    IL Returns:   avg=%.4f, min=%.4f, max=%.4f",
+                np.mean(all_il_returns),
+                np.min(all_il_returns),
+                np.max(all_il_returns),
+            )
+
+            # Show first few windows for detail
+            logger.info("  First 3 windows detail:")
+            for i, (window_key, stats) in enumerate(windows.items()):
+                if i >= 3:
+                    break
+                logger.info(
+                    "    %s: Total=%.4f, Fees=%.4f, IL=%.4f",
+                    window_key,
+                    stats["total_returns"],
+                    stats["fee_returns"],
+                    stats["il_returns"],
+                )
+
+    def _print_portfolio_vs_individual_comparison(
+        self, portfolio_stats: Dict, chain_stats: Dict[str, Dict]
+    ) -> None:
+        """
+        Prints a comparison of the portfolio's performance with individual chain performance.
+        """
+        logger.info("\n=== PORTFOLIO VS INDIVIDUAL CHAIN COMPARISON ===")
+
+        # Extract portfolio summary stats
+        portfolio_total_avg = portfolio_stats.get("total", {}).get("mean_pct", 0)
+        portfolio_fee_avg = portfolio_stats.get("fee", {}).get("mean_pct", 0)
+        portfolio_il_avg = portfolio_stats.get("il", {}).get("mean_pct", 0)
+
+        logger.info("Equal-Weighted Portfolio (across all chains):")
+        logger.info("  Total Returns: %.4f", portfolio_total_avg)
+        logger.info("  Fee Returns:  %.4f", portfolio_fee_avg)
+        logger.info("  IL Returns:   %.4f", portfolio_il_avg)
+
+        logger.info("\nIndividual Chain Performance vs Portfolio:")
+        for chain, windows in chain_stats.items():
+            # Calculate average returns across all windows for this chain
+            all_total_returns = [stats["total_returns"] for stats in windows.values()]
+            all_fee_returns = [stats["fee_returns"] for stats in windows.values()]
+            all_il_returns = [stats["il_returns"] for stats in windows.values()]
+
+            chain_total_avg = np.mean(all_total_returns)
+            chain_fee_avg = np.mean(all_fee_returns)
+            chain_il_avg = np.mean(all_il_returns)
+
+            logger.info("\n%s:", chain)
+            logger.info(
+                "  Total Returns: %.4f (vs portfolio: %+.4f)",
+                chain_total_avg,
+                chain_total_avg - portfolio_total_avg,
+            )
+            logger.info(
+                "  Fee Returns:  %.4f (vs portfolio: %+.4f)",
+                chain_fee_avg,
+                chain_fee_avg - portfolio_fee_avg,
+            )
+            logger.info(
+                "  IL Returns:   %.4f (vs portfolio: %+.4f)",
+                chain_il_avg,
+                chain_il_avg - portfolio_il_avg,
+            )
+
+    def _print_summary_table(
+        self, portfolio_stats: Dict, chain_stats: Dict[str, Dict]
+    ) -> None:
+        """
+        Prints a summary table comparing the portfolio's performance with individual chain performance.
+        """
+        logger.info("\n=== SUMMARY TABLE ===")
+        logger.info(
+            "| Chain | Total Returns (Avg) | Fee Returns (Avg) | IL Returns (Avg) |"
+        )
+        logger.info(
+            "|-------|--------------------|--------------------|--------------------|"
+        )
+
+        portfolio_total_avg = portfolio_stats.get("total", {}).get("mean_pct", 0)
+        portfolio_fee_avg = portfolio_stats.get("fee", {}).get("mean_pct", 0)
+        portfolio_il_avg = portfolio_stats.get("il", {}).get("mean_pct", 0)
+
+        for chain, windows in chain_stats.items():
+            all_total_returns = [stats["total_returns"] for stats in windows.values()]
+            all_fee_returns = [stats["fee_returns"] for stats in windows.values()]
+            all_il_returns = [stats["il_returns"] for stats in windows.values()]
+
+            chain_total_avg = np.mean(all_total_returns)
+            chain_fee_avg = np.mean(all_fee_returns)
+            chain_il_avg = np.mean(all_il_returns)
+
+            logger.info(
+                "| %s | %.4f (vs portfolio: %+.4f) | %.4f (vs portfolio: %+.4f) | %.4f (vs portfolio: %+.4f) |"
+                % (
+                    chain,
+                    chain_total_avg,
+                    chain_total_avg - portfolio_total_avg,
+                    chain_fee_avg,
+                    chain_fee_avg - portfolio_fee_avg,
+                    chain_il_avg,
+                    chain_il_avg - portfolio_il_avg,
+                )
+            )
 
     @staticmethod
     def _pretty_print(stats: Dict) -> None:
@@ -228,6 +446,7 @@ class SimulationWorkflow:
         fee: List[float],
         il: List[float],
         dbg: Dict,
+        chain_stats: Dict[str, Dict],
     ) -> Dict:
         out_dir = Path("portfolio_results")
         out_dir.mkdir(exist_ok=True)
@@ -238,6 +457,7 @@ class SimulationWorkflow:
             "final_fee_returns": fee,
             "final_il_returns": il,
             "debug": dbg,
+            "individual_chain_stats": chain_stats,
         }
         (out_dir / "simulation_results.json").write_text(json.dumps(result, indent=2))
         logger.info("Results written to %s", out_dir / "simulation_results.json")
