@@ -55,12 +55,31 @@ class LPPoolSimulator:
     def calculate_token_prices(self, tvl_ratio: float) -> Tuple[float, float]:
         """Calculate UP and DOWN token prices based on TVL performance ratio.
 
-        UP now redeems at 1.5x starting TVL (instead of 2x).
-        When tvl_ratio = 1.5, up_price = 1.0 (full redemption).
+        UP price is linear between two configurable TVL ratio points:
+        - tvl_ratio = min_tvl_ratio: up_price = min_up_price (e.g., 0.01)
+        - tvl_ratio = max_tvl_ratio: up_price = max_up_price (e.g., 1.0)
+
+        You can customize these values by modifying the class attributes below.
         """
-        # UP reaches full redemption (1.0) when TVL reaches 1.5x
-        # Formula: up_price = (2/3) * tvl_ratio, capped between 0.01 and 0.99
-        up_price = min(0.99, max(0.01, (2 / 3) * tvl_ratio))
+        # Configurable parameters - modify these to change the pricing curve
+        min_tvl_ratio = 0.7  # TVL ratio at which UP price is minimum
+        max_tvl_ratio = 2.2  # TVL ratio at which UP price is maximum
+        min_up_price = 0.01  # Minimum UP token price
+        max_up_price = 1.0  # Maximum UP token price
+
+        # Calculate the linear relationship
+        if max_tvl_ratio == min_tvl_ratio:
+            # Avoid division by zero - use constant price
+            up_price = min_up_price
+        else:
+            # Linear interpolation: up_price = m * tvl_ratio + b
+            slope = (max_up_price - min_up_price) / (max_tvl_ratio - min_tvl_ratio)
+            intercept = min_up_price - slope * min_tvl_ratio
+            up_price = slope * tvl_ratio + intercept
+
+        # Cap the price between min and max values
+        up_price = min(max_up_price, max(min_up_price, up_price))
+
         return up_price, 1.0 - up_price
 
     def calculate_initial_amm_deposits(
@@ -76,6 +95,11 @@ class LPPoolSimulator:
         """
         # At start, tvl_ratio = 1.0, so prices are:
         up_price, down_price = self.calculate_token_prices(1.0)
+
+        # Safety check: ensure prices are valid
+        if up_price <= 0.0 or down_price <= 0.0:
+            # Fallback to equal distribution if prices are invalid
+            return total_tokens_per_type, total_tokens_per_type, 0.0, 0.0
 
         # We mint equal amounts of UP and DOWN (e.g., 1000 each)
         # Some goes to AMM with equal USD value, rest stays external
@@ -110,6 +134,10 @@ class LPPoolSimulator:
         self, k: float, up_price: float, down_price: float
     ) -> Tuple[float, float, float]:
         """Execute proportional withdrawal from LP pool."""
+        # Safety check: avoid division by zero when prices are at extremes
+        if up_price <= 0.0 or down_price <= 0.0:
+            return 0.0, 0.0, k
+
         pre_withdrawal_up = np.sqrt(k * down_price / up_price)
         pre_withdrawal_down = np.sqrt(k * up_price / down_price)
 
@@ -125,6 +153,10 @@ class LPPoolSimulator:
         self, k: float, up_price: float, down_price: float
     ) -> float:
         """Calculate total pool value using constant product formula."""
+        # Safety check: avoid division by zero when prices are at extremes
+        if up_price <= 0.0 or down_price <= 0.0:
+            return 0.0
+
         up_tokens = np.sqrt(k * down_price / up_price)
         down_tokens = np.sqrt(k * up_price / down_price)
         return up_tokens * up_price + down_tokens * down_price
@@ -246,11 +278,19 @@ class LPPoolSimulator:
         if days_elapsed <= 0 or last_up_price is None or last_down_price is None:
             return 0.0
 
+        # Safety check: avoid division by zero when prices are at extremes
+        if up_price <= 0.0 or down_price <= 0.0:
+            return 0.0
+
         # Calculate token amounts at current prices
         up_tokens = np.sqrt(k * down_price / up_price)
         down_tokens = np.sqrt(k * up_price / down_price)
 
         # Calculate what token amounts would have been at last prices with same k
+        # Safety check for last prices too
+        if last_up_price <= 0.0 or last_down_price <= 0.0:
+            return 0.0
+
         last_up_tokens = np.sqrt(k * last_down_price / last_up_price)
         last_down_tokens = np.sqrt(k * last_up_price / last_down_price)
 
@@ -375,9 +415,17 @@ class PortfolioAnalyzer:
             end_ratio
         )
 
-        start_price_ratio = start_up_price / start_down_price
-        end_price_ratio = end_up_price / end_down_price
-        price_ratio_change = (end_price_ratio - start_price_ratio) / start_price_ratio
+        # Safety check: avoid division by zero when prices are at extremes
+        if start_down_price <= 0.0 or end_down_price <= 0.0:
+            start_price_ratio = 0.0
+            end_price_ratio = 0.0
+            price_ratio_change = 0.0
+        else:
+            start_price_ratio = start_up_price / start_down_price
+            end_price_ratio = end_up_price / end_down_price
+            price_ratio_change = (
+                end_price_ratio - start_price_ratio
+            ) / start_price_ratio
 
         return {
             "up_down_ratio_change_pct": price_ratio_change * 100,
