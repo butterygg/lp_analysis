@@ -116,3 +116,7 @@ top_evm_chains: ["Arbitrum", "Base", "Unichain"]  # Analyzed chains
 - **Visualization generator**: `src/lp_visualization.py`  
 - **Core utilities**: `src/lp_simulation_utils.py`
 - **GitHub**: https://github.com/butterygg/lp_analysis
+
+## Disclaimer
+
+This analysis is for informational purposes only and does not constitute financial advice. The results are based on historical data and may not reflect future performance. The simulation code and models may contain errors, bugs, or inaccuracies that could affect the reliability of the results.
