@@ -1,0 +1,22 @@
+{
+  "chain": "Unichain",
+  "current_tvl": 688409052,
+  "lower_bound": 522922053.52341413,
+  "upper_bound": 2065227156.0,
+  "confidence_level": 0.99,
+  "bootstrap_lower": 523345262.6706435,
+  "bootstrap_upper": 50362412283.85216,
+  "regime_aware_lower": 518914997.47719,
+  "regime_aware_upper": 55822594639.73036,
+  "log_returns_mean": 0.6452570400934261,
+  "log_returns_std": 1.3254749539737012,
+  "volatility_30day": 2.189601146275706,
+  "volatility_annual": 9.128549956870629,
+  "num_periods": 159,
+  "data_days": 179,
+  "used_priors": true,
+  "prior_weight": 0.005555555555555536,
+  "growth_cap_applied": false,
+  "age_cap_multiplier": 3.0,
+  "analysis_date": "2025-08-10T15:25:01.547839"
+}
