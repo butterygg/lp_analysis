@@ -55,27 +55,15 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 ### Aggregated Portfolio Performance
 **Total Returns (21-day periods)**
 - Mean: -13.79%  
-- 25th Percentile: -20.67%  
-- 50th Percentile (Median): -7.71%  
-- 75th Percentile: -2.44%  
 
 **Fee Component**  
 - Mean: +0.09%  
-- 25th Percentile: +0.07%  
-- 50th Percentile (Median): +0.08%  
-- 75th Percentile: +0.11%  
 
 **Impermanent Loss Component**  
 - Mean: -8.87%  
-- 25th Percentile: -14.58%  
-- 50th Percentile (Median): -5.11%  
-- 75th Percentile: -0.10%
 
 **External Token Component**
 - Mean: -5.01%
-- 25th Percentile: -11.18%
-- 50th Percentile (Median): -4.49%
-- 75th Percentile: +2.22%
 
 ### Individual Chain Performance
 
