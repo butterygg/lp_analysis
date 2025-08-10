@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from lp_simulation_utils import (
+from .lp_simulation_utils import (
     PortfolioAnalyzer,
     SimulationConfig,
     cached_api_fetch,
@@ -252,7 +252,29 @@ class SimulationWorkflow:
         self._print_individual_chain_results(chain_stats)
         self._print_portfolio_vs_individual_comparison(stats, chain_stats)
         self._print_summary_table(stats, chain_stats)
-        return self._dump_json(stats, totals, fees, ils, externals, dbg, chain_stats)
+
+        # Calculate raw returns for each chain
+        chain_raw_returns = {}
+        for chain in chain_totals:
+            chain_total_returns = self.analyser.extract_final_returns(
+                chain_totals[chain]
+            )
+            chain_fee_returns = self.analyser.extract_final_returns(chain_fees[chain])
+            chain_il_returns = self.analyser.extract_final_returns(chain_ils[chain])
+            chain_external_returns = self.analyser.extract_final_returns(
+                chain_externals[chain]
+            )
+
+            chain_raw_returns[chain] = {
+                "total": [float(x * 100) for x in chain_total_returns],
+                "fee": [float(x * 100) for x in chain_fee_returns],
+                "il": [float(x * 100) for x in chain_il_returns],
+                "external": [float(x * 100) for x in chain_external_returns],
+            }
+
+        return self._dump_json(
+            stats, totals, fees, ils, externals, dbg, chain_stats, chain_raw_returns
+        )
 
     # -------------------- internals -------------------- #
     def _run_overlapping_windows(self, first_window_start: datetime) -> Tuple[
@@ -548,6 +570,7 @@ class SimulationWorkflow:
         external: List[float],
         dbg: Dict,
         chain_stats: Dict[str, Dict],
+        chain_raw_returns: Dict[str, Dict[str, List[float]]],
     ) -> Dict:
         out_dir = Path("portfolio_results")
         out_dir.mkdir(exist_ok=True)
@@ -574,6 +597,8 @@ class SimulationWorkflow:
                 "il": [float(x * 100) for x in il],  # Convert to percentage
                 "external": [float(x * 100) for x in external],  # Convert to percentage
             },
+            "chain_stats": chain_stats,
+            "per_chain_raw_returns": chain_raw_returns,
         }
         (out_dir / "simulation_results.json").write_text(json.dumps(result, indent=2))
         logger.info("Results written to %s", out_dir / "simulation_results.json")

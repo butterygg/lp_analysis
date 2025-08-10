@@ -51,19 +51,42 @@ class LPReturnVisualizer:
         output_path.mkdir(exist_ok=True)
 
         self._create_return_distributions(output_path)
+        self._create_per_chain_distributions(output_path)
 
         print(f"✓ Visualizations saved to {output_path}")
 
     def _create_return_distributions(self, output_path: Path) -> None:
-        """Create return distribution histograms."""
+        """Create return distribution histograms for the aggregated portfolio."""
+        self._create_and_save_distribution_plot(
+            self.raw_data,
+            "Aggregated Portfolio LP Return Distribution",
+            output_path / "return_distributions.png",
+        )
+
+    def _create_per_chain_distributions(self, output_path: Path) -> None:
+        """Create return distribution histograms for each individual chain."""
+        per_chain_data = self.data.get("per_chain_raw_returns")
+        if not per_chain_data:
+            print("Info: Per-chain return data not found. Skipping individual plots.")
+            return
+
+        for chain_name, raw_data in per_chain_data.items():
+            title = f"{chain_name} LP Return Distribution"
+            output_file = output_path / f"{chain_name.lower()}_return_distributions.png"
+            self._create_and_save_distribution_plot(raw_data, title, output_file)
+
+    def _create_and_save_distribution_plot(
+        self, raw_data: Dict, title: str, output_file: Path
+    ) -> None:
+        """Creates and saves a return distribution plot."""
         fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 12))
-        fig.suptitle("LP Return Distribution Analysis", fontsize=16, fontweight="bold")
+        fig.suptitle(title, fontsize=16, fontweight="bold")
 
         # Use raw data if available, otherwise fall back to generated distributions
-        total_data = self.raw_data["total"]
-        fee_data = self.raw_data["fee"]
-        il_data = self.raw_data["il"]
-        external_data = self.raw_data["external"]
+        total_data = raw_data.get("total", [])
+        fee_data = raw_data.get("fee", [])
+        il_data = raw_data.get("il", [])
+        external_data = raw_data.get("external", [])
 
         self._plot_histogram(ax1, total_data, "Total Returns", self.colors["total"])
         self._plot_histogram(ax2, fee_data, "Fee Returns", self.colors["fee"])
@@ -78,9 +101,7 @@ class LPReturnVisualizer:
         )
 
         plt.tight_layout()
-        plt.savefig(
-            output_path / "return_distributions.png", dpi=300, bbox_inches="tight"
-        )
+        plt.savefig(output_file, dpi=300, bbox_inches="tight")
         plt.close()
 
     def _plot_histogram(self, ax, data: List[float], title: str, color: str) -> None:
