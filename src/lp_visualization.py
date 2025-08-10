@@ -116,14 +116,15 @@ class LPReturnVisualizer:
                 va="center",
                 transform=ax.transAxes,
             )
-            ax.set_title(title, fontsize=12, fontweight="bold")
+            ax.set_title(f"{title} (N=0)", fontsize=12, fontweight="bold")
             return
 
         # Convert to numpy array and handle any invalid values
         data_array = np.array(data)
         data_array = data_array[np.isfinite(data_array)]  # Remove any NaN or inf values
+        num_samples = len(data_array)
 
-        if len(data_array) == 0:
+        if num_samples == 0:
             ax.text(
                 0.5,
                 0.5,
@@ -132,7 +133,7 @@ class LPReturnVisualizer:
                 va="center",
                 transform=ax.transAxes,
             )
-            ax.set_title(title, fontsize=12, fontweight="bold")
+            ax.set_title(f"{title} (N=0)", fontsize=12, fontweight="bold")
             return
 
         data_pct = data_array
@@ -175,7 +176,7 @@ class LPReturnVisualizer:
 
         ax.set_xlabel("Return (%)", fontweight="bold")
         ax.set_ylabel("Frequency", fontweight="bold")
-        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.set_title(f"{title} (N={num_samples})", fontsize=12, fontweight="bold")
         ax.legend()
         ax.grid(True, alpha=0.3)
 
