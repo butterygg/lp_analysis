@@ -49,8 +49,12 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - Contributes additional negative returns averaging -5.01% per period
 
 # LP Return Distribution
-- Important: Take note of the mean and median total returns in the below reports
-- This corresponds to the % return you can expect to make by depositing liquidity into these pools. Does not include liquidity incentives provided via merkl.
+- This corresponds to the % return you can expect to make by depositing liquidity into these pools.
+
+## Important Notes
+- **Take note of the mean and median total returns in the below reports**
+- **The below returns do not include liquidity incentives provided via merkl.**
+
 
 ## Aggregated Portfolio Performance
 (corresponds to making an initial equal deposit into each pool)
