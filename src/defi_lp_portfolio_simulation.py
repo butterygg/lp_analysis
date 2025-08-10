@@ -34,12 +34,6 @@ def create_chain_specific_config() -> SimulationConfig:
 
     # Override the default chain_tvl_ratios with chain-specific values
     config.chain_tvl_ratios = {
-        "default": {
-            "min_tvl_ratio": 0.7,
-            "max_tvl_ratio": 2.2,
-            "min_up_price": 0.01,
-            "max_up_price": 1.0,
-        },
         "Arbitrum": {
             "min_tvl_ratio": 0.82,
             "max_tvl_ratio": 1.3,
@@ -179,7 +173,13 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         start_tvl = chain_tvl_dict[timestamps[0]]
 
         return self.calculate_returns(
-            pool_values, external_holdings, chain_tvl_dict, start_tvl, timestamps, fees
+            pool_values,
+            external_holdings,
+            chain_tvl_dict,
+            start_tvl,
+            timestamps,
+            fees,
+            chain,
         )
 
     def simulate_single_period(
@@ -275,7 +275,7 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         chain_tvl_dict = tvl_data.chain_tvls[chain]
         start_tvl = chain_tvl_dict[timestamps[0]]
         debug_info = self._calculate_debug_info_base(
-            chain_tvl_dict, timestamps, il_contributions, start_tvl
+            chain_tvl_dict, timestamps, il_contributions, start_tvl, chain
         )
 
         return {chain: debug_info}
@@ -286,10 +286,11 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         timestamps: List[int],
         il_returns: Dict[int, float],
         start_tvl: float,
+        chain: str = "default",
     ) -> Dict[str, float]:
         """Calculate debug information using base class logic."""
         return super()._calculate_debug_info(
-            tvl_data, timestamps, il_returns, start_tvl
+            tvl_data, timestamps, il_returns, start_tvl, chain
         )
 
     def _add_to_portfolio(
@@ -340,7 +341,7 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
                 for ext, price in zip(
                     external_holdings[timestamps[-1]],
                     self.pool_simulator.calculate_token_prices(
-                        tvl_data.chain_tvls[chain][timestamps[-1]] / start_tvl
+                        tvl_data.chain_tvls[chain][timestamps[-1]] / start_tvl, chain
                     ),
                 )
             )

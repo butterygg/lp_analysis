@@ -15,13 +15,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SimulationConfig:
     """Configuration parameters for the LP portfolio simulation."""
 
-    analysis_months: int = 24
+    analysis_months: int = 12
     simulation_period_days: int = 21
     period_spacing_days: int = 1
     fee_rate: float = 0.003
@@ -33,15 +36,8 @@ class SimulationConfig:
 
     def __post_init__(self):
         if self.chain_tvl_ratios is None:
-            # Default chain-specific TVL ratio configurations
-            self.chain_tvl_ratios = {
-                "default": {
-                    "min_tvl_ratio": 0.7,
-                    "max_tvl_ratio": 2.2,
-                    "min_up_price": 0.01,
-                    "max_up_price": 1.0,
-                }
-            }
+            # Initialize with empty dict - chain configs must be provided
+            self.chain_tvl_ratios = {}
 
 
 def cached_api_fetch(url: str, cache_file: Path) -> Dict:
@@ -82,9 +78,21 @@ class LPPoolSimulator:
         You can customize these values by modifying the config.chain_tvl_ratios dictionary.
         """
         # Get chain-specific configuration, fallback to default if not found
-        chain_config = self.config.chain_tvl_ratios.get(
-            chain, self.config.chain_tvl_ratios["default"]
-        )
+        if chain not in self.config.chain_tvl_ratios:
+            # If no default exists, use the first available chain config
+            available_chains = list(self.config.chain_tvl_ratios.keys())
+            if available_chains:
+                fallback_chain = available_chains[0]
+                logger.error(
+                    f"Warning: Chain '{chain}' not found in config, using '{fallback_chain}' as fallback"
+                )
+                chain_config = self.config.chain_tvl_ratios[fallback_chain]
+            else:
+                raise ValueError(
+                    "No chain configurations found in config.chain_tvl_ratios"
+                )
+        else:
+            chain_config = self.config.chain_tvl_ratios[chain]
 
         min_tvl_ratio = chain_config["min_tvl_ratio"]
         max_tvl_ratio = chain_config["max_tvl_ratio"]
@@ -358,6 +366,7 @@ class PortfolioAnalyzer:
         start_tvl: float,
         timestamps: List[int],
         fees: float,
+        chain: str = "default",
     ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
         """Calculate total, fee, and IL returns over time."""
         total_returns = {}
@@ -369,7 +378,7 @@ class PortfolioAnalyzer:
                 current_tvl = tvl_data[t]
                 tvl_ratio = current_tvl / start_tvl
                 up_price, down_price = self.pool_simulator.calculate_token_prices(
-                    tvl_ratio
+                    tvl_ratio, chain
                 )
 
                 ext_up, ext_down = external_holdings[t]
@@ -392,11 +401,12 @@ class PortfolioAnalyzer:
         tvl_data: Dict[int, float],
         start_timestamp: int,
         end_timestamp: int,
+        chain: str = "default",
         debug: bool = False,
     ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict[str, float]]:
         """Simulate portfolio for a single period."""
         pool_values, external_holdings, fees = self.pool_simulator.simulate_pool_period(
-            tvl_data, start_timestamp, end_timestamp, "default"
+            tvl_data, start_timestamp, end_timestamp, chain
         )
 
         if not pool_values:
@@ -408,16 +418,28 @@ class PortfolioAnalyzer:
 
         start_tvl = tvl_data[timestamps[0]]
         total_returns, fee_returns, il_returns = self.calculate_returns(
-            pool_values, external_holdings, tvl_data, start_tvl, timestamps, fees
+            pool_values,
+            external_holdings,
+            tvl_data,
+            start_tvl,
+            timestamps,
+            fees,
+            "default",
         )
 
         debug_info = self._calculate_debug_info(
-            tvl_data, timestamps, il_returns, start_tvl
+            tvl_data, timestamps, il_returns, start_tvl, chain
         )
 
         if debug:
             self._print_period_debug(
-                pool_values, external_holdings, tvl_data, fees, timestamps, debug_info
+                pool_values,
+                external_holdings,
+                tvl_data,
+                fees,
+                timestamps,
+                debug_info,
+                chain,
             )
 
         return total_returns, fee_returns, il_returns, debug_info
@@ -428,6 +450,7 @@ class PortfolioAnalyzer:
         timestamps: List[int],
         il_returns: Dict[int, float],
         start_tvl: float,
+        chain: str = "default",
     ) -> Dict[str, float]:
         """Calculate debug information for the period."""
         if not timestamps:
@@ -437,10 +460,10 @@ class PortfolioAnalyzer:
         start_ratio = 1.0
         end_ratio = end_tvl / start_tvl
         start_up_price, start_down_price = self.pool_simulator.calculate_token_prices(
-            start_ratio, "default"
+            start_ratio, chain
         )
         end_up_price, end_down_price = self.pool_simulator.calculate_token_prices(
-            end_ratio, "default"
+            end_ratio, chain
         )
 
         # Safety check: avoid division by zero when prices are at extremes
@@ -470,7 +493,14 @@ class PortfolioAnalyzer:
         }
 
     def _print_period_debug(
-        self, pool_values, external_holdings, tvl_data, fees, timestamps, debug_info
+        self,
+        pool_values,
+        external_holdings,
+        tvl_data,
+        fees,
+        timestamps,
+        debug_info,
+        chain: str = "default",
     ):
         """Print debug information for the period."""
         start_tvl = tvl_data[timestamps[0]]
@@ -482,7 +512,7 @@ class PortfolioAnalyzer:
                 for ext, price in zip(
                     external_holdings[timestamps[-1]],
                     self.pool_simulator.calculate_token_prices(
-                        tvl_data[timestamps[-1]] / start_tvl, "default"
+                        tvl_data[timestamps[-1]] / start_tvl, chain
                     ),
                 )
             )
@@ -544,6 +574,7 @@ class PortfolioAnalyzer:
                         tvl_data_source,
                         start_timestamp,
                         end_timestamp,
+                        "default",  # Single TVL data uses default chain config
                         debug=(period_count < 3),
                     )
                 )
