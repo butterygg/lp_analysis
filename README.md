@@ -111,18 +111,18 @@ The scalar bounds calculator addresses critical issues from the design document:
 ## Example Results
 
 ### 30-Day Bounds (Full 12-month history)
-| Chain | Current TVL | 99% CI Bounds | Width | Volatility |
-|-------|------------|---------------|-------|------------|
-| **Base** | $4.62B | [$3.71B, $6.92B] | 1.9x | 16.1% |
-| **Arbitrum** | $3.20B | [$2.57B, $4.47B] | 1.7x | 13.7% |
-| **Unichain** | $0.69B | [$0.53B, $2.07B] | 3.9x | 335.1% (capped) |
+| Chain        | Current TVL | 99% CI Bounds    | Width | Volatility      |
+| ------------ | ----------- | ---------------- | ----- | --------------- |
+| **Base**     | $4.62B      | [$3.71B, $6.92B] | 1.9x  | 16.1%           |
+| **Arbitrum** | $3.20B      | [$2.57B, $4.47B] | 1.7x  | 13.7%           |
+| **Unichain** | $0.69B      | [$0.53B, $2.07B] | 3.9x  | 335.1% (capped) |
 
 ### 21-Day Bounds (Recent 3 months only)
-| Chain | Current TVL | 99% CI Bounds | Width | Max Observed |
-|-------|------------|---------------|-------|--------------|
-| **Base** | $4.62B | [$4.44B, $5.97B] | 1.35x | -4.2% / +30.6% |
-| **Arbitrum** | $3.20B | [$2.91B, $3.80B] | 1.30x | -9.4% / +19.6% |
-| **Unichain** | $0.69B | [$0.54B, $1.11B] | 2.06x | -21.8% / +61.0% |
+| Chain        | Current TVL | 99% CI Bounds    | Width | Max Observed    |
+| ------------ | ----------- | ---------------- | ----- | --------------- |
+| **Base**     | $4.62B      | [$4.44B, $5.97B] | 1.35x | -4.2% / +30.6%  |
+| **Arbitrum** | $3.20B      | [$2.91B, $3.80B] | 1.30x | -9.4% / +19.6%  |
+| **Unichain** | $0.69B      | [$0.54B, $1.11B] | 2.06x | -21.8% / +61.0% |
 
 ## Cached Data
 
