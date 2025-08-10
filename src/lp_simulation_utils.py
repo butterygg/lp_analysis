@@ -400,7 +400,7 @@ class PortfolioAnalyzer:
         if start_tvl <= 0:
             return {}, {}, {}, {}
 
-        # Common initial notional (USD) – ensures components add up to total
+        # Common initial notional (USD)
         initial_notional = 1_000.0
 
         ret_total: Dict[int, float] = {}
@@ -408,16 +408,10 @@ class PortfolioAnalyzer:
         ret_il: Dict[int, float] = {}
         ret_external: Dict[int, float] = {}
 
-        # Prices at start and initial invariant k0 recovered from pool value
+        # Prices at start and initial external USD value (captures 1) un-deposited tokens)
         start_price_up, start_price_down = self.pool.get_token_prices(1.0, chain_key)
-        start_pool_value = pool_val_by_ts[timeline[0]]
-        # k0 from V0 = 2 * sqrt(k0 * pu0 * pd0)  =>  k0 = (V0/2)^2 / (pu0*pd0)
-        k0 = (start_pool_value / 2.0) ** 2 / (start_price_up * start_price_down)
-
-        # Recover initial pool token amounts to compute HODL baseline for IL
-        init_up_in_pool, init_down_in_pool, _, _ = self.pool.bootstrap_balances(
-            chain_key
-        )
+        ext_up0, ext_down0 = external_by_ts[timeline[0]]
+        initial_external_usd = ext_up0 * start_price_up + ext_down0 * start_price_down
 
         for ts in timeline:
             tvl_ratio = tvl_by_ts[ts] / start_tvl
@@ -427,24 +421,6 @@ class PortfolioAnalyzer:
             ext_value = ext_up * price_up + ext_down * price_down
             pool_value = pool_val_by_ts[ts]
 
-            # Exact LP share remaining from invariant: share = sqrt(k_t / k_0)
-            # Recover k_t from V_t = 2 * sqrt(k_t * pu_t * pd_t)
-            kt = (
-                (pool_value / 2.0) ** 2 / (price_up * price_down)
-                if price_up > 0 and price_down > 0
-                else k0
-            )
-            share_remaining = (
-                float(np.clip(np.sqrt(kt / k0), 0.0, 1.0)) if k0 > 0 else 1.0
-            )
-
-            # IL component: pool value minus HODL value of still-in-pool initial tokens
-            hodl_remaining_value = share_remaining * (
-                init_up_in_pool * price_up + init_down_in_pool * price_down
-            )
-            il_absolute = pool_value - hodl_remaining_value
-            ret_il[ts] = il_absolute / initial_notional
-
             # Fee component on initial notional (fees are cumulative for the period)
             ret_fee[ts] = fees / initial_notional
 
@@ -452,8 +428,11 @@ class PortfolioAnalyzer:
             gross_value = pool_value + ext_value
             ret_total[ts] = (gross_value + fees - initial_notional) / initial_notional
 
-            # External component as residual so that: total == fee + il + external
-            ret_external[ts] = ret_total[ts] - ret_fee[ts] - ret_il[ts]
+            # External component: change in value of tokens held outside the AMM
+            ret_external[ts] = (ext_value - initial_external_usd) / initial_notional
+
+            # IL component as residual so that: total == fee + il + external
+            ret_il[ts] = ret_total[ts] - ret_fee[ts] - ret_external[ts]
 
         return ret_total, ret_fee, ret_il, ret_external
 
