@@ -57,13 +57,13 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 
 ## Individual Pool Performance
 
-### Arbitrum pool returns
+### Arbitrum TVL market pool returns
 ![Arbitrum Return Distributions](lp_returns/arbitrum_return_distributions.png)
 
-### Base pool returns
+### Base TVL market pool returns
 ![Base Return Distributions](lp_returns/base_return_distributions.png)
 
-### Unichain pool returns
+### Unichain TVL market pool returns
 ![Unichain Return Distributions](lp_returns/unichain_return_distributions.png)
 
 ## Notes & Observations
