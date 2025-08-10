@@ -51,7 +51,7 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 # LP Return Distribution
 - This corresponds to the % return you can expect to make by depositing liquidity into these pools.
 
-## Important Notes
+## Important
 - **Take note of the mean and median total returns in the below reports**
 - **The below returns do not include liquidity incentives provided via merkl.**
 
