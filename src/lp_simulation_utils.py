@@ -37,7 +37,7 @@ class SimulationConfig:
     simulation_period_days: int = 21
     period_spacing_days: int = 1
     fee_rate: float = 0.003
-    withdrawal_enabled: bool = True
+    withdrawal_enabled: bool = False
     withdrawal_timing_pct: float = 0.25
     withdrawal_amount_pct: float = 0.7
     chain_tvl_ratios: Dict[str, Dict[str, float]] | None = None  # injected later
@@ -361,22 +361,30 @@ class PortfolioAnalyzer:
         end_ts: int,
         chain_key: str = "default",
         debug: bool = False,
-    ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict[str, float]]:
+    ) -> Tuple[
+        Dict[int, float],
+        Dict[int, float],
+        Dict[int, float],
+        Dict[int, float],
+        Dict[str, float],
+    ]:
         pool_val, ext_balances, fees = self.pool.simulate_one_period(
             tvl_by_timestamp, start_ts, end_ts, chain_key
         )
         if not pool_val:
-            return {}, {}, {}, {}
+            return {}, {}, {}, {}, {}
 
         timeline = sorted(pool_val)
-        returns_total, returns_fee, returns_il = self._build_return_series(
-            pool_val, ext_balances, tvl_by_timestamp, timeline, fees, chain_key
+        returns_total, returns_fee, returns_il, returns_external = (
+            self._build_return_series(
+                pool_val, ext_balances, tvl_by_timestamp, timeline, fees, chain_key
+            )
         )
         dbg = self._debug_metrics(tvl_by_timestamp, timeline, returns_il, chain_key)
         if debug:
             self._print_debug_snapshot(dbg)
 
-        return returns_total, returns_fee, returns_il, dbg
+        return returns_total, returns_fee, returns_il, returns_external, dbg
 
     # -------------------- stats helpers -------------------- #
     def _build_return_series(
@@ -387,26 +395,67 @@ class PortfolioAnalyzer:
         timeline: List[int],
         fees: float,
         chain_key: str,
-    ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
+    ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict[int, float]]:
         start_tvl = tvl_by_ts[timeline[0]]
         if start_tvl <= 0:
-            return {}, {}, {}
+            return {}, {}, {}, {}
+
+        # Common initial notional (USD) – ensures components add up to total
+        initial_notional = 1_000.0
 
         ret_total: Dict[int, float] = {}
         ret_fee: Dict[int, float] = {}
         ret_il: Dict[int, float] = {}
+        ret_external: Dict[int, float] = {}
+
+        # Prices at start and initial invariant k0 recovered from pool value
+        start_price_up, start_price_down = self.pool.get_token_prices(1.0, chain_key)
+        start_pool_value = pool_val_by_ts[timeline[0]]
+        # k0 from V0 = 2 * sqrt(k0 * pu0 * pd0)  =>  k0 = (V0/2)^2 / (pu0*pd0)
+        k0 = (start_pool_value / 2.0) ** 2 / (start_price_up * start_price_down)
+
+        # Recover initial pool token amounts to compute HODL baseline for IL
+        init_up_in_pool, init_down_in_pool, _, _ = self.pool.bootstrap_balances(
+            chain_key
+        )
 
         for ts in timeline:
             tvl_ratio = tvl_by_ts[ts] / start_tvl
             price_up, price_down = self.pool.get_token_prices(tvl_ratio, chain_key)
+
             ext_up, ext_down = external_by_ts[ts]
             ext_value = ext_up * price_up + ext_down * price_down
+            pool_value = pool_val_by_ts[ts]
 
-            gross_value = pool_val_by_ts[ts] + ext_value
-            ret_total[ts] = (gross_value + fees) / 1_000.0 - 1
-            ret_fee[ts] = fees / 1_000.0
-            ret_il[ts] = gross_value / 1_000.0 - 1
-        return ret_total, ret_fee, ret_il
+            # Exact LP share remaining from invariant: share = sqrt(k_t / k_0)
+            # Recover k_t from V_t = 2 * sqrt(k_t * pu_t * pd_t)
+            kt = (
+                (pool_value / 2.0) ** 2 / (price_up * price_down)
+                if price_up > 0 and price_down > 0
+                else k0
+            )
+            share_remaining = (
+                float(np.clip(np.sqrt(kt / k0), 0.0, 1.0)) if k0 > 0 else 1.0
+            )
+
+            # IL component: pool value minus HODL value of still-in-pool initial tokens
+            hodl_remaining_value = share_remaining * (
+                init_up_in_pool * price_up + init_down_in_pool * price_down
+            )
+            il_absolute = pool_value - hodl_remaining_value
+            ret_il[ts] = il_absolute / initial_notional
+
+            # Fee component on initial notional (fees are cumulative for the period)
+            ret_fee[ts] = fees / initial_notional
+
+            # Total return on initial notional
+            gross_value = pool_value + ext_value
+            ret_total[ts] = (gross_value + fees - initial_notional) / initial_notional
+
+            # External component as residual so that: total == fee + il + external
+            ret_external[ts] = ret_total[ts] - ret_fee[ts] - ret_il[ts]
+
+        return ret_total, ret_fee, ret_il, ret_external
 
     def _debug_metrics(
         self,
@@ -464,6 +513,7 @@ class PortfolioAnalyzer:
         final_total: List[float],
         final_fee: List[float] | None = None,
         final_il: List[float] | None = None,
+        final_external: List[float] | None = None,
     ) -> Dict[str, Dict[str, float]]:
         if not final_total:
             return {}
@@ -493,4 +543,5 @@ class PortfolioAnalyzer:
 
         section("fee", final_fee)
         section("il", final_il)
+        section("external", final_external)
         return res
