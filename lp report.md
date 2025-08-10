@@ -11,16 +11,11 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - **DOWN tokens** increase in value when chain TVL falls below the starting level  
 - Token prices are determined by a piece-wise linear mapping based on TVL ratio (Current TVL / Starting TVL)
 - UP and DOWN prices always sum to $1.00, creating a complementary pair
-- Chain-specific price bounds reflect different volatility characteristics:
-  - **Arbitrum**: TVL ratio 0.82-1.30 → UP price 0.01-1.00
-  - **Base**: TVL ratio 0.82-1.40 → UP price 0.01-1.00  
-  - **Unichain**: TVL ratio 0.75-1.66 → UP price 0.01-1.00
 
 ### Data and Sampling  
 - **Historical TVL data**: 12 months (if sufficient data) from Arbitrum, Base, and Unichain
 - **Simulation periods**: 21-day intervals with 1-day spacing between start dates  
 - **Total periods analyzed**: 340 rolling windows
-- **Data source**: DeFiLlama API with forward-filling for missing data points
 
 ### Liquidity Pool Mechanics
 - **Initial setup**: 1,000 UP and 1,000 DOWN tokens minted per simulation
@@ -49,7 +44,7 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - Primary driver of negative returns, averaging -8.87% per period
 
 **External Token Component**: Value change of tokens held outside the AMM
-- Some UP/DOWN tokens remain outside the pool after initial liquidity provision, due to depositing an unequal quantity of UP and DOWN tokens into pool.
+- Some UP/DOWN tokens remain outside the pool after initial liquidity provision, due to depositing an unequal quantity of UP and DOWN tokens into pool but minting equal amounts of each token, hence having some left over.
 - These tokens fluctuate in value based on TVL changes
 - Contributes additional negative returns averaging -5.01% per period
 
