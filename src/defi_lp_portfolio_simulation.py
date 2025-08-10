@@ -28,28 +28,48 @@ from lp_simulation_utils import (
 )
 
 
-@dataclass
-class SimulationConfig:
-    """Configuration parameters for the LP portfolio simulation."""
+def create_chain_specific_config() -> SimulationConfig:
+    """Create a SimulationConfig with chain-specific TVL ratio configurations."""
+    config = SimulationConfig()
 
-    top_evm_chains: List[str] = None
-    analysis_months: int = 24
-    simulation_period_days: int = 30
-    period_spacing_days: int = 1
-    fee_rate: float = 0.003
-    withdrawal_enabled: bool = True
-    withdrawal_timing_pct: float = 0.25
-    withdrawal_amount_pct: float = 0.7
+    # Override the default chain_tvl_ratios with chain-specific values
+    config.chain_tvl_ratios = {
+        "default": {
+            "min_tvl_ratio": 0.7,
+            "max_tvl_ratio": 2.2,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0,
+        },
+        "Arbitrum": {
+            "min_tvl_ratio": 0.82,
+            "max_tvl_ratio": 1.3,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0,
+        },
+        "Base": {
+            "min_tvl_ratio": 0.82,
+            "max_tvl_ratio": 1.4,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0,
+        },
+        "Unichain": {
+            "min_tvl_ratio": 0.75,
+            "max_tvl_ratio": 1.66,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0,
+        },
+    }
 
-    def __post_init__(self):
-        if self.top_evm_chains is None:
-            self.top_evm_chains = [
-                "Arbitrum",
-                "Base",
-                "Unichain",
-                # "BSC",
-                # "Avalanche",
-            ]
+    # Set top EVM chains
+    config.top_evm_chains = [
+        "Arbitrum",
+        "Base",
+        "Unichain",
+        # "BSC",
+        # "Avalanche",
+    ]
+
+    return config
 
 
 class ChainTVLData:
@@ -136,10 +156,6 @@ def get_top_evm_chains() -> List[str]:
     return config.top_evm_chains
 
 
-
-
-
-
 class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
     """Specialized portfolio analyzer for multi-chain simulations."""
 
@@ -161,7 +177,7 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         # Convert chain TVL data to format expected by base class
         chain_tvl_dict = tvl_data.chain_tvls[chain]
         start_tvl = chain_tvl_dict[timestamps[0]]
-        
+
         return self.calculate_returns(
             pool_values, external_holdings, chain_tvl_dict, start_tvl, timestamps, fees
         )
@@ -191,11 +207,11 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
             # Get chain data and simulate using base class
             if chain not in tvl_data.chain_tvls:
                 continue
-                
+
             chain_tvl_dict = tvl_data.chain_tvls[chain]
             pool_values, external_holdings, fees = (
                 self.pool_simulator.simulate_pool_period(
-                    chain_tvl_dict, start_timestamp, end_timestamp
+                    chain_tvl_dict, start_timestamp, end_timestamp, chain
                 )
             )
 
@@ -261,9 +277,9 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         debug_info = self._calculate_debug_info_base(
             chain_tvl_dict, timestamps, il_contributions, start_tvl
         )
-        
+
         return {chain: debug_info}
-    
+
     def _calculate_debug_info_base(
         self,
         tvl_data: Dict[int, float],
@@ -272,7 +288,9 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         start_tvl: float,
     ) -> Dict[str, float]:
         """Calculate debug information using base class logic."""
-        return super()._calculate_debug_info(tvl_data, timestamps, il_returns, start_tvl)
+        return super()._calculate_debug_info(
+            tvl_data, timestamps, il_returns, start_tvl
+        )
 
     def _add_to_portfolio(
         self,
@@ -409,12 +427,11 @@ class ChainPortfolioAnalyzer(BasePortfolioAnalyzer):
         return portfolio_performances, fee_performances, il_performances, all_debug_info
 
 
-
 class SimulationWorkflow:
     """Orchestrates the complete simulation workflow."""
 
     def __init__(self):
-        self.config = SimulationConfig()
+        self.config = create_chain_specific_config()
         self.tvl_data = ChainTVLData(self.config)
         self.analyzer = ChainPortfolioAnalyzer(self.config)
 
@@ -495,7 +512,6 @@ class SimulationWorkflow:
             print(
                 "\nNote: 'IL' here represents portfolio value change (excluding fees)"
             )
-
 
     def _save_results(
         self,

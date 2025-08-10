@@ -22,12 +22,26 @@ class SimulationConfig:
     """Configuration parameters for the LP portfolio simulation."""
 
     analysis_months: int = 24
-    simulation_period_days: int = 30
+    simulation_period_days: int = 21
     period_spacing_days: int = 1
     fee_rate: float = 0.003
     withdrawal_enabled: bool = True
     withdrawal_timing_pct: float = 0.25
     withdrawal_amount_pct: float = 0.7
+    # Chain-specific TVL ratio configurations for UP/DOWN token pricing
+    chain_tvl_ratios: Dict[str, Dict[str, float]] = None
+
+    def __post_init__(self):
+        if self.chain_tvl_ratios is None:
+            # Default chain-specific TVL ratio configurations
+            self.chain_tvl_ratios = {
+                "default": {
+                    "min_tvl_ratio": 0.7,
+                    "max_tvl_ratio": 2.2,
+                    "min_up_price": 0.01,
+                    "max_up_price": 1.0,
+                }
+            }
 
 
 def cached_api_fetch(url: str, cache_file: Path) -> Dict:
@@ -52,20 +66,30 @@ class LPPoolSimulator:
     def __init__(self, config: SimulationConfig):
         self.config = config
 
-    def calculate_token_prices(self, tvl_ratio: float) -> Tuple[float, float]:
+    def calculate_token_prices(
+        self, tvl_ratio: float, chain: str = "default"
+    ) -> Tuple[float, float]:
         """Calculate UP and DOWN token prices based on TVL performance ratio.
 
         UP price is linear between two configurable TVL ratio points:
         - tvl_ratio = min_tvl_ratio: up_price = min_up_price (e.g., 0.01)
         - tvl_ratio = max_tvl_ratio: up_price = max_up_price (e.g., 1.0)
 
-        You can customize these values by modifying the class attributes below.
+        Args:
+            tvl_ratio: The TVL performance ratio
+            chain: Chain name to use for configuration (defaults to "default")
+
+        You can customize these values by modifying the config.chain_tvl_ratios dictionary.
         """
-        # Configurable parameters - modify these to change the pricing curve
-        min_tvl_ratio = 0.7  # TVL ratio at which UP price is minimum
-        max_tvl_ratio = 2.2  # TVL ratio at which UP price is maximum
-        min_up_price = 0.01  # Minimum UP token price
-        max_up_price = 1.0  # Maximum UP token price
+        # Get chain-specific configuration, fallback to default if not found
+        chain_config = self.config.chain_tvl_ratios.get(
+            chain, self.config.chain_tvl_ratios["default"]
+        )
+
+        min_tvl_ratio = chain_config["min_tvl_ratio"]
+        max_tvl_ratio = chain_config["max_tvl_ratio"]
+        min_up_price = chain_config["min_up_price"]
+        max_up_price = chain_config["max_up_price"]
 
         # Calculate the linear relationship
         if max_tvl_ratio == min_tvl_ratio:
@@ -83,18 +107,19 @@ class LPPoolSimulator:
         return up_price, 1.0 - up_price
 
     def calculate_initial_amm_deposits(
-        self, total_tokens_per_type: float
+        self, total_tokens_per_type: float, chain: str = "default"
     ) -> Tuple[float, float, float, float]:
         """Calculate initial AMM deposits and external balances.
 
         Args:
             total_tokens_per_type: Total number of UP and DOWN tokens to mint (e.g., 1000 each)
+            chain: Chain name to use for configuration (defaults to "default")
 
         Returns:
             Tuple of (up_tokens_in_amm, down_tokens_in_amm, external_up_tokens, external_down_tokens)
         """
         # At start, tvl_ratio = 1.0, so prices are:
-        up_price, down_price = self.calculate_token_prices(1.0)
+        up_price, down_price = self.calculate_token_prices(1.0, chain)
 
         # Safety check: ensure prices are valid
         if up_price <= 0.0 or down_price <= 0.0:
@@ -166,6 +191,7 @@ class LPPoolSimulator:
         tvl_data: Dict[int, float],
         start_timestamp: int,
         end_timestamp: int,
+        chain: str = "default",
     ) -> Tuple[Dict[int, float], Dict[int, Tuple[float, float]], float]:
         """Simulate UP/DOWN token LP pool over one period.
 
@@ -173,6 +199,7 @@ class LPPoolSimulator:
             tvl_data: Dictionary of {timestamp: tvl_value}
             start_timestamp: Period start timestamp
             end_timestamp: Period end timestamp
+            chain: Chain name to use for configuration (defaults to "default")
 
         Returns:
             Tuple of (pool_values, external_holdings, accumulated_fees)
@@ -193,7 +220,7 @@ class LPPoolSimulator:
             return {}, {}, 0.0
 
         return self._simulate_pool_internal(
-            tvl_data, available_times, start_tvl, start_timestamp, end_timestamp
+            tvl_data, available_times, start_tvl, start_timestamp, end_timestamp, chain
         )
 
     def _simulate_pool_internal(
@@ -203,17 +230,18 @@ class LPPoolSimulator:
         start_tvl: float,
         start_timestamp: int,
         end_timestamp: int,
+        chain: str = "default",
     ) -> Tuple[Dict[int, float], Dict[int, Tuple[float, float]], float]:
         """Internal pool simulation logic with reduced nesting."""
         # Calculate initial setup
         _, _, external_up_tokens, external_down_tokens = (
-            self.calculate_initial_amm_deposits(1000.0)
+            self.calculate_initial_amm_deposits(1000.0, chain)
         )
         k = 1000.0 * 1000.0  # This will be adjusted based on actual initial deposits
 
         # Recalculate k based on actual initial AMM deposits
         up_in_amm, down_in_amm, external_up_tokens, external_down_tokens = (
-            self.calculate_initial_amm_deposits(1000.0)
+            self.calculate_initial_amm_deposits(1000.0, chain)
         )
         k = up_in_amm * down_in_amm
 
@@ -233,7 +261,7 @@ class LPPoolSimulator:
         for timestamp in available_times:
             current_tvl = tvl_data[timestamp]
             tvl_ratio = current_tvl / start_tvl
-            up_price, down_price = self.calculate_token_prices(tvl_ratio)
+            up_price, down_price = self.calculate_token_prices(tvl_ratio, chain)
 
             accumulated_fees += self._calculate_period_fees(
                 k,
@@ -368,7 +396,7 @@ class PortfolioAnalyzer:
     ) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float], Dict[str, float]]:
         """Simulate portfolio for a single period."""
         pool_values, external_holdings, fees = self.pool_simulator.simulate_pool_period(
-            tvl_data, start_timestamp, end_timestamp
+            tvl_data, start_timestamp, end_timestamp, "default"
         )
 
         if not pool_values:
@@ -409,10 +437,10 @@ class PortfolioAnalyzer:
         start_ratio = 1.0
         end_ratio = end_tvl / start_tvl
         start_up_price, start_down_price = self.pool_simulator.calculate_token_prices(
-            start_ratio
+            start_ratio, "default"
         )
         end_up_price, end_down_price = self.pool_simulator.calculate_token_prices(
-            end_ratio
+            end_ratio, "default"
         )
 
         # Safety check: avoid division by zero when prices are at extremes
@@ -454,7 +482,7 @@ class PortfolioAnalyzer:
                 for ext, price in zip(
                     external_holdings[timestamps[-1]],
                     self.pool_simulator.calculate_token_prices(
-                        tvl_data[timestamps[-1]] / start_tvl
+                        tvl_data[timestamps[-1]] / start_tvl, "default"
                     ),
                 )
             )
