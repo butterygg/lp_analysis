@@ -98,12 +98,12 @@ class LPPoolSimulator:
             (params["min_up_price"], params["max_up_price"]),
         )
         up_price = np.clip(up_price, params["min_up_price"], params["max_up_price"])
-        
+
         # Ensure prices are always positive and sum to 1
         up_price = max(up_price, 0.001)  # Minimum 0.1% price
         up_price = min(up_price, 0.999)  # Maximum 99.9% price
         down_price = 1.0 - up_price
-        
+
         return up_price, down_price
 
     # -------------------- pool bootstrap -------------------- #
@@ -117,7 +117,7 @@ class LPPoolSimulator:
             up_in_pool, down_in_pool, up_external, down_external
         """
         price_up, price_down = self.get_token_prices(1.0, chain_key)
-        
+
         # Safety check: ensure prices are valid
         if price_up <= 0 or price_down <= 0:
             # Fallback to equal distribution
@@ -148,9 +148,11 @@ class LPPoolSimulator:
 
         pool_up = np.sqrt(invariant_k * price_down / price_up)
         pool_down = np.sqrt(invariant_k * price_up / price_down)
-        
+
         # Check for invalid values
-        if np.any(np.isnan([pool_up, pool_down])) or np.any(np.isinf([pool_up, pool_down])):
+        if np.any(np.isnan([pool_up, pool_down])) or np.any(
+            np.isinf([pool_up, pool_down])
+        ):
             return 0.0, 0.0, invariant_k
 
         up_out = pool_up * self.cfg.withdrawal_amount_pct
@@ -163,18 +165,18 @@ class LPPoolSimulator:
         """USD value of a constant-product pool."""
         if min(price_up, price_down) <= 0:
             return 0.0
-            
+
         # Safety check: prevent division by zero
         if price_up <= 0 or price_down <= 0:
             return 0.0
-            
+
         up_amt = np.sqrt(k * price_down / price_up)
         down_amt = np.sqrt(k * price_up / price_down)
-        
+
         # Check for invalid values
         if np.any(np.isnan([up_amt, down_amt])) or np.any(np.isinf([up_amt, down_amt])):
             return 0.0
-            
+
         return up_amt * price_up + down_amt * price_down
 
     # -------------------- one-period simulation -------------------- #
@@ -264,9 +266,9 @@ class LPPoolSimulator:
                 "min_tvl_ratio": 0.1,
                 "max_tvl_ratio": 10.0,
                 "min_up_price": 0.001,
-                "max_up_price": 0.999
+                "max_up_price": 0.999,
             }
-            
+
         if key not in self.cfg.chain_tvl_ratios:
             fallback = next(iter(self.cfg.chain_tvl_ratios))
             logger.warning("Unknown chain '%s' – falling back to '%s'", key, fallback)
@@ -298,7 +300,9 @@ class LPPoolSimulator:
         down_prev = np.sqrt(k * prev_up / prev_down)
 
         # Check for invalid values
-        if np.any(np.isnan([up_now, down_now, up_prev, down_prev])) or np.any(np.isinf([up_now, down_now, up_prev, down_prev])):
+        if np.any(np.isnan([up_now, down_now, up_prev, down_prev])) or np.any(
+            np.isinf([up_now, down_now, up_prev, down_prev])
+        ):
             return 0.0
 
         volume_usd = (
@@ -393,7 +397,7 @@ class PortfolioAnalyzer:
         start_tvl = tvl_by_ts[timeline[0]]
         if start_tvl <= 0:
             return {}, {}, {}
-            
+
         ret_total: Dict[int, float] = {}
         ret_fee: Dict[int, float] = {}
         ret_il: Dict[int, float] = {}
@@ -422,7 +426,7 @@ class PortfolioAnalyzer:
         price_up_end, price_down_end = self.pool.get_token_prices(
             end_tvl / start_tvl, chain_key
         )
-        
+
         # Safety check: prevent division by zero
         if price_down_start <= 0 or price_down_end <= 0:
             ratio_start = 1.0
@@ -430,7 +434,7 @@ class PortfolioAnalyzer:
         else:
             ratio_start = price_up_start / price_down_start
             ratio_end = price_up_end / price_down_end
-            
+
         return {
             "start_tvl": start_tvl,
             "end_tvl": end_tvl,
@@ -469,12 +473,12 @@ class PortfolioAnalyzer:
     ) -> Dict[str, Dict[str, float]]:
         if not final_total:
             return {}
-            
+
         # Filter out invalid values
         valid_total = [x for x in final_total if np.isfinite(x)]
         if not valid_total:
             return {}
-            
+
         res: Dict[str, Dict[str, float]] = {}
         total_arr = np.array(valid_total)
         res["total"] = {
