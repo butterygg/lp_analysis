@@ -4,8 +4,8 @@
   "lower_bound": 522922053.52341413,
   "upper_bound": 2065227156.0,
   "confidence_level": 0.99,
-  "bootstrap_lower": 523345262.6706435,
-  "bootstrap_upper": 50362412283.85216,
+  "bootstrap_lower": 523248297.1482876,
+  "bootstrap_upper": 50513257359.46868,
   "regime_aware_lower": 518914997.47719,
   "regime_aware_upper": 55822594639.73036,
   "log_returns_mean": 0.6452570400934261,
@@ -18,5 +18,5 @@
   "prior_weight": 0.005555555555555536,
   "growth_cap_applied": false,
   "age_cap_multiplier": 3.0,
-  "analysis_date": "2025-08-10T15:25:01.547839"
+  "analysis_date": "2025-08-10T16:43:17.539678"
 }
