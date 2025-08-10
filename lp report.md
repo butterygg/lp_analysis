@@ -53,7 +53,7 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 
 ## Important
 - **Take note of the mean and median total returns in the below reports**
-- **The below returns do not include liquidity incentives provided via merkl.**
+- **The below returns do not include the liquidity incentives you will receive via merkl.**
 
 
 ## Aggregated Portfolio Performance
