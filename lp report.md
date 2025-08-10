@@ -52,7 +52,7 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - Important: Take note of the mean and median total returns in the below reports
 
 ### Aggregated Portfolio Performance
-(corresponds to making an initial equal allocation to each pool)
+(corresponds to making an initial equal deposit into each pool)
 ![Portfolio Return Distributions](lp_returns/return_distributions.png)
 
 ### Individual Chain Performance
