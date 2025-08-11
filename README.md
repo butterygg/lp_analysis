@@ -1,140 +1,102 @@
-# Scalar Bounds Calculator for Prediction Markets
+# Liquidity Provider Return Analysis - Methodology Report  
+  
+## Overview  
+This report analyzes the simulated historical returns for liquidity providers (LPs) in chain TVL futures markets using backtesting over 12 months of data across Arbitrum, Base, and Unichain.  
+  
+# Methodology  
+  
+## Market Structure  
+Each market contains UP and DOWN tokens representing directional bets on chain TVL changes:
+- **UP tokens** increase in value when chain TVL grows above the starting level
+- **DOWN tokens** increase in value when chain TVL falls below the starting level  
+- Token prices are determined by a piece-wise linear mapping based on TVL ratio (Current TVL / Starting TVL)
+- UP and DOWN prices always sum to $1.00, creating a complementary pair
 
-Enhanced TVL bounds calculation for DeFi chains, optimized for Uniswap v2 scalar prediction markets based on recommendations from `scalar-bounds-design.md`.
+## Data and Sampling  
+- **Historical TVL data**: 12 months (if sufficient data) from Arbitrum, Base, and Unichain
+- **Simulation periods**: 21-day intervals with 1-day spacing between start dates  
+- **Total periods analyzed**: 340 rolling windows
 
-## Setup
+## Liquidity Pool Mechanics
+- **Initial setup**: 1,000 UP and 1,000 DOWN tokens minted per simulation
+- **AMM model**: Constant product (Uniswap v2 style) with equal USD value deposited initially
+- **Fee structure**: 0.3% trading fee on all transactions
+- **Price updates**: Daily based on actual TVL changes
+- **Fee calculation**: Based on implied trading volume from token rebalancing
 
-1. Create and activate a virtual environment:
-```bash
-uv venv
-source .venv/bin/activate
+## Portfolio Construction  
+- **Allocation**: Equal-weighted exposure across Arbitrum, Base, and Unichain
+- **Risk management**: Liquidity kept in pool over full duration of period
+- **Return calculation**: Portfolio returns averaged across the three markets
+
+## Understanding LP Return Components
+
+**Total Returns**: Your complete profit/loss as an LP, combining all effects below
+
+**Fee Component**: Revenue earned from trading fees (0.3% per trade)
+- Positive by design - you earn fees when traders swap tokens
+- Averages ~0.09% per 21-day period across all chains
+- Conservative estimate assuming only daily price updates
+
+**Impermanent Loss (IL) Component**: Loss from AMM token rebalancing  
+- Occurs when UP/DOWN token prices change from their starting 50/50 ratio
+- Calculated as the difference between holding tokens in the AMM vs. holding them separately
+- Primary driver of negative returns, averaging -8.87% per period
+
+**External Token Component**: Value change of tokens held outside the AMM
+- Some UP/DOWN tokens remain outside the pool after initial liquidity provision, due to depositing an unequal quantity of UP and DOWN tokens into pool but minting equal amounts of each token, hence having some left over.
+- These tokens fluctuate in value based on TVL changes
+- Contributes additional negative returns averaging -5.01% per period
+
+# LP Return Distribution
+- The below reflects the simulated % return from depositing liquidity into these pools, based on historical data.
+
+## Important
+- **Take note of the mean and median total returns in the below reports**
+
+
+## Aggregated Portfolio Performance
+(corresponds to making an initial equal deposit into each pool)
+![Portfolio Return Distributions](lp_returns/return_distributions.png)
+
+## Individual Pool Performance
+
+### Arbitrum TVL market pool returns
+![Arbitrum Return Distributions](lp_returns/arbitrum_return_distributions.png)
+
+### Base TVL market pool returns
+![Base Return Distributions](lp_returns/base_return_distributions.png)
+
+### Unichain TVL market pool returns
+![Unichain Return Distributions](lp_returns/unichain_return_distributions.png)
+
+## Notes & Observations
+- **Chain diversification matters**: Portfolio approach reduces risk compared to single-chain exposure, with Arbitrum showing the best individual performance
+- **Unichain volatility**: Shows highest returns volatility and worst performance, reflecting its newer status and higher TVL fluctuations
+- **Conservative fee estimates**: Actual trading frequency may be higher than daily, potentially improving fee revenue
+
+# Technical Implementation
+
+## Configuration Parameters
+The simulation can be configured via the `SimulationConfig` class:
+```python
+analysis_months: int = 12                    # Historical data period
+simulation_period_days: int = 21             # Length of each LP position
+period_spacing_days: int = 1                 # Days between simulation starts  
+fee_rate: float = 0.003                      # 0.3% trading fee
+withdrawal_enabled: bool = False             # No early withdrawal strategy
+withdrawal_timing_pct: float = None          # Timing for withdrawal (if enabled)
+withdrawal_amount_pct: float = None           # Amount to withdraw (if enabled)
+top_evm_chains: ["Arbitrum", "Base", "Unichain"]  # Analyzed chains
 ```
 
-2. Install dependencies:
-```bash
-uv pip install numpy scipy matplotlib requests
-```
+## Code Repository
+- **Main simulation**: `src/defi_lp_portfolio_simulation.py`
+- **Visualization generator**: `src/lp_visualization.py`  
+- **Core utilities**: `src/lp_simulation_utils.py`
+- **GitHub**: https://github.com/butterygg/lp_analysis
 
-## Main Scripts
 
-### 1. Scalar Bounds Calculator (PRIMARY)
-Calculate bounds using empirical quantiles and log-returns for any period:
+# Disclaimer
 
-```bash
-# Default 30-day bounds
-python src/scalar_bounds_calculator.py Base
-python src/scalar_bounds_calculator.py Arbitrum
-python src/scalar_bounds_calculator.py Unichain
-
-# Custom period (e.g., 20-day, 21-day)
-python src/scalar_bounds_calculator.py Base 20
-python src/scalar_bounds_calculator.py Arbitrum 21
-```
-
-**Features:**
-- **Log-returns** instead of arithmetic returns for better multiplicative growth handling
-- **Empirical quantiles** (actual 0.5%/99.5%) instead of assuming normal distribution
-- **Bootstrap confidence intervals** with block sampling to preserve autocorrelation
-- **Regime-aware bounds** that adapt to calm vs stress market conditions
-- **Automatic young series handling** with cross-chain priors and smart caps
-- **Configurable period** (default 30 days, but supports any period)
-
-### 2. Recent Data Bounds Calculator
-Calculate bounds using only recent historical data:
-
-```bash
-# Using last 3 months for 21-day bounds
-python src/scalar_bounds_recent.py Unichain 21 3
-
-# Using last 12 months for 21-day bounds
-python src/scalar_bounds_recent.py Base 21 12
-python src/scalar_bounds_recent.py Arbitrum 21 12
-```
-
-**Features:**
-- **Recency filter** to focus on recent market conditions
-- **Max observed bounds** showing actual historical extremes
-- **Detailed quantile analysis** (0.5%, 2.5%, 50%, 97.5%, 99.5%)
-- **Comparison visualization** between recent and full history
-
-### 3. Period Comparison
-Compare bounds across different time periods:
-
-```bash
-# Compare 20-day vs 30-day bounds
-python src/compare_periods.py
-```
-
-### 4. Method Comparison
-Compare old (normal distribution) vs new (empirical) methods:
-
-```bash
-python src/compare_bounds_methods.py
-```
-
-## Output Files
-
-Results are saved in `portfolio_results/`:
-
-**Scalar bounds outputs:**
-- `{chain}_scalar_bounds_{period}d.json` - Numerical bounds and statistics
-- `{chain}_scalar_bounds_{period}d_viz.png` - Multi-panel visualization
-
-**Recent bounds outputs:**
-- `{chain}_bounds_recent_{period}d_{months}m.json` - Recent window analysis
-- `{chain}_bounds_recent_{period}d_{months}m_viz.png` - Visualization with max bounds
-
-**Comparison outputs:**
-- `period_comparison.png` - Comparison across different periods
-- `bounds_methods_comparison.png` - Old vs new method comparison
-
-## Key Improvements
-
-The scalar bounds calculator addresses critical issues from the design document:
-
-1. **Statistical Robustness**
-   - Log-returns: `log(M_{t+30}/M_t)` vs old `(M_{t+30}-M_t)/M_t`
-   - Empirical quantiles from actual data vs z-score assumptions
-   - Bootstrap and regime detection for market conditions
-
-2. **Young Series Handling**
-   - Cross-sectional priors from mature chains (Base, Arbitrum)
-   - Age-based caps: 5x (<90 days), 3x (<180 days), 2x (>180 days)
-   - Growth-rate caps: 2.5x max if weekly growth >50%
-   - Automatic prior weighting based on data availability
-
-3. **Prediction Market Optimization**
-   - Bounds designed to avoid Uniswap v2 "dead zones" near extremes
-   - Tighter, more tradeable ranges from empirical methods
-   - Multiple methods provide validation and confidence
-
-## Example Results
-
-### 30-Day Bounds (Full 12-month history)
-| Chain        | Current TVL | 99% CI Bounds    | Width | Volatility      |
-| ------------ | ----------- | ---------------- | ----- | --------------- |
-| **Base**     | $4.62B      | [$3.71B, $6.92B] | 1.9x  | 16.1%           |
-| **Arbitrum** | $3.20B      | [$2.57B, $4.47B] | 1.7x  | 13.7%           |
-| **Unichain** | $0.69B      | [$0.53B, $2.07B] | 3.9x  | 335.1% (capped) |
-
-### 21-Day Bounds (Recent 3 months only)
-| Chain        | Current TVL | 99% CI Bounds    | Width | Max Observed    |
-| ------------ | ----------- | ---------------- | ----- | --------------- |
-| **Base**     | $4.62B      | [$4.44B, $5.97B] | 1.35x | -4.2% / +30.6%  |
-| **Arbitrum** | $3.20B      | [$2.91B, $3.80B] | 1.30x | -9.4% / +19.6%  |
-| **Unichain** | $0.69B      | [$0.54B, $1.11B] | 2.06x | -21.8% / +61.0% |
-
-## Cached Data
-
-TVL data is cached in `cache/` directory:
-- `chain_tvl_{Chain}.json` - Historical TVL data from DeFiLlama
-- Delete cache files to force fresh data fetch
-
-## Deprecated Scripts
-
-Old scripts using arithmetic returns and normal distribution have been moved to `src/_old/`:
-- `tvl_bounds_calculator.py` - Original normal distribution method
-- `tvl_bounds_young_chains.py` - Separate young chains handler
-- `compare_chain_bounds.py` - Old comparison script
-
-These are retained for reference but should not be used for production bounds setting.
+This analysis is for informational purposes only and does not constitute financial advice. The results are based on historical data and may not reflect future performance. The simulation code and models may contain errors, bugs, or inaccuracies that could affect the reliability of the results.
