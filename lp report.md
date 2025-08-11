@@ -1,7 +1,7 @@
 # Liquidity Provider Return Analysis - Methodology Report  
   
 ## Overview  
-This report analyzes the simulated returns for liquidity providers (LPs) in chain TVL futures markets using historical backtesting over 12 months of data across Arbitrum, Base, and Unichain.  
+This report analyzes the simulated historical returns for liquidity providers (LPs) in chain TVL futures markets using backtesting over 12 months of data across Arbitrum, Base, and Unichain.  
   
 # Methodology  
   
