@@ -1,7 +1,7 @@
 # Liquidity Provider Return Analysis - Methodology Report  
   
 ## Overview  
-This report analyzes the expected returns for liquidity providers (LPs) in chain TVL futures markets using historical backtesting over 12 months of data across Arbitrum, Base, and Unichain.  
+This report analyzes the simulated returns for liquidity providers (LPs) in chain TVL futures markets using historical backtesting over 12 months of data across Arbitrum, Base, and Unichain.  
   
 # Methodology  
   
@@ -49,11 +49,10 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 - Contributes additional negative returns averaging -5.01% per period
 
 # LP Return Distribution
-- This corresponds to the % return you can expect to make by depositing liquidity into these pools.
+- The below reflects the simulated % return from depositing liquidity into these pools, based on historical data.
 
 ## Important
 - **Take note of the mean and median total returns in the below reports**
-- **The below returns do not include the liquidity incentives you will receive via merkl.**
 
 
 ## Aggregated Portfolio Performance
