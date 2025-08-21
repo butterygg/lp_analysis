@@ -1,1098 +1,925 @@
 #!/usr/bin/env python3
 """
-Volume vs (Liquidity × Volatility) + Sampled Monthly IL%/$ for Uniswap Pools (v2/v3/v4)
+Daily Volume  ↔  Daily Impermanent-Loss (IL) for Uniswap pools (v2 / v3).
 
-Key features
-- Per-subgraph schema autodetection (handles v4 variants that use currency0/currency1)
-- Day data aggregation with robust fallbacks; reconstructs volumeUSD via tokenDayDatas when needed
-- Monthly impermanent loss (IL) computed by short-horizon sampling & time-normalization (fees excluded)
-- Saves: pool_metrics_daily.(csv|parquet), pool_metrics_monthly_il.csv, summary.json, scatter.png
+Pipeline: fetch → compute → analyse → plot → persist
+Reporting metric:  il_per_1k_volume  (= |avg daily IL| / avg daily volume * 1000)
+
+Key features:
+- Timeseries-first discovery (default) for v3 AND v2: collect pools/pairs that actually have day/hour rows in the lookback window.
+- Automatic fallback to entity-first discovery if timeseries-first yields no candidates.
+- Optional entity-first discovery (lifetime volume ranking) with lifetime volume prefiltering.
+- Excludes stable↔stable pools by filtering pools whose median price ≈ 1.
+- Fallback for v3 pools with missing poolDayDatas: aggregate poolHourDatas → daily.
+- Outlier removal using log-MAD on il_per_1k_volume.
+- Boundary-inclusive filters (date_gte / periodStartUnix_gte).
 """
 
-import os
-import json
-import time
-import hashlib
-import pickle
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass
-from pathlib import Path
+from __future__ import annotations
 
-import requests
-import pandas as pd
+# --------------------------------------------------------------------------- #
+# Imports                                                                     #
+# --------------------------------------------------------------------------- #
+import os, json, time, pickle, hashlib, argparse
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import requests
 from loguru import logger
 from tqdm import tqdm
 
 
-# ---------------------------- Config ----------------------------
-
-
-@dataclass
-class Config:
-    # scope
-    N_TOP: int = 30
-    LOOKBACK_DAYS: int = 60
-    CHAINS: List[str] = None
-
-    # volatility window
-    VOL_WINDOW: int = 7
-    MIN_VOLATILITY: float = 1e-6
-
-    # depth approximation (until tick-walk is added)
-    USE_FAST_APPROXIMATION: bool = True
-
-    # IL sampling knobs (variance reduction), fees are excluded globally
-    IL_SAMPLE_HORIZON_DAYS: int = 1  # h
-    IL_SAMPLE_STEP_DAYS: int = 1  # sampling step
-    IL_MIN_SAMPLES_PER_MONTH: int = 5
-    IL_FALLBACK_TO_ENDPOINT: bool = True
-
-    OUTPUT_DIR: str = "output"
-    TRIM_PERCENTILE: float = 0.01
-
-    def __post_init__(self):
-        if self.CHAINS is None:
-            self.CHAINS = ["mainnet", "base"]
-
-
-# Subgraph IDs (update as needed)
+# --------------------------------------------------------------------------- #
+# Constants / Config                                                          #
+# --------------------------------------------------------------------------- #
 SUBGRAPH_IDS = {
     "mainnet": {
-        "v2": "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
+        # "v2": "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
         "v3": "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
-        # "v4": "6XvRX3WHSvzBVTiPdF66XSBVbxWuHqijWANbjJxRDyzr",
     },
     "base": {
-        # "v2": "4jGhpKjW4prWoyt5Bwk1ZHUwdEmNWveJcjEyjoTZWCY9",
+        # NOTE: If this ever goes stale for day/hour entities, the v3 fallback will still work.
         "v3": "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG",
-        # "v4": "2L6yxqUZ7dT6GWoTy9qxNBkf9kEk65me3XPMvbGsmJUZ",
     },
 }
 
 
-def get_subgraph_url(subgraph_id: str) -> str:
-    return f"https://gateway.thegraph.com/api/subgraphs/id/{subgraph_id}"
+class Config:
+    def __init__(
+        self,
+        n_top: int = 100,
+        lookback_days: int = 60,
+        chains: list[str] | None = None,
+        cache_ttl: int = 60 * 60 * 24,
+        output_dir: str = "output",
+        # pools whose median price is within [1 - eps, 1 + eps] are treated as stable↔stable and excluded
+        stable_price_eps: float = 0.03,
+        # pools with extremely tiny avg |IL| (≈0) make ratios explode; drop them
+        min_avg_abs_il_usd: float = 1e-6,
+        # outlier removal strength (log-MAD fence multiplier)
+        mad_k: float = 2.5,
+        # discovery mode and lifetime volume prefilters (coarse, server-side)
+        discovery_mode: str = "timeseries",  # "timeseries" or "entity"
+        min_discovery_lifetime_volume_usd: float | None = None,
+        max_discovery_lifetime_volume_usd: float | None = None,
+        # exact analysis-time filters on computed avg daily volume over lookback
+        min_avg_daily_volume_usd: float | None = None,
+        max_avg_daily_volume_usd: float | None = None,
+    ) -> None:
+        self.N_TOP = n_top
+        self.LOOKBACK_DAYS = lookback_days
+        self.CHAINS = chains or ["mainnet", "base"]
+        self.CACHE_TTL = cache_ttl
+        self.OUTPUT_DIR = output_dir
+        self.STABLE_PRICE_EPS = stable_price_eps
+        self.MIN_AVG_ABS_IL_USD = min_avg_abs_il_usd
+        self.MAD_K = mad_k
+
+        self.DISCOVERY_MODE = discovery_mode
+        self.MIN_DISCOVERY_LIFETIME_VOLUME_USD = min_discovery_lifetime_volume_usd
+        self.MAX_DISCOVERY_LIFETIME_VOLUME_USD = max_discovery_lifetime_volume_usd
+        self.MIN_AVG_DAILY_VOLUME_USD = min_avg_daily_volume_usd
+        self.MAX_AVG_DAILY_VOLUME_USD = max_avg_daily_volume_usd
 
 
-# ---------------------------- Graph client ----------------------------
+# --------------------------------------------------------------------------- #
+# Helpers                                                                     #
+# --------------------------------------------------------------------------- #
+def md5(text: str) -> str:
+    return hashlib.md5(text.encode()).hexdigest()
 
 
+def epoch_days_ago(days: int) -> int:
+    today_utc = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return int((today_utc - timedelta(days=days)).timestamp())
+
+
+def to_num(s: pd.Series) -> pd.Series:
+    return pd.to_numeric(s, errors="coerce")
+
+
+def iqr_bounds(s: pd.Series, k: float = 3.0) -> Tuple[float, float]:
+    s = s[np.isfinite(s)]
+    if s.empty:
+        return -np.inf, np.inf
+    q1, q3 = np.percentile(s, [25, 75])
+    iqr = q3 - q1
+    return q1 - k * iqr, q3 + k * iqr
+
+
+def mad_bounds_log(s: pd.Series, k: float = 2.5) -> Tuple[float, float]:
+    """
+    Robust bounds in LOG space for heavy-tailed positive data.
+    Keeps values whose log10 lie within median ± k * 1.4826 * MAD.
+    Returns bounds in the original (linear) space.
+    """
+    s = s[(s > 0) & np.isfinite(s)]
+    if s.empty:
+        # Domain-aware sentinel for positive variable
+        return 0.0, np.inf
+    log_s = np.log10(s)
+    med = np.nanmedian(log_s)
+    mad = np.nanmedian(np.abs(log_s - med))
+    if not np.isfinite(med) or not np.isfinite(mad) or mad == 0:
+        lo_q, hi_q = np.nanpercentile(s, [1, 99])
+        return float(max(lo_q, 0.0)), float(hi_q)
+    scale = 1.4826 * mad
+    lo, hi = med - k * scale, med + k * scale
+    return float(10**lo), float(10**hi)
+
+
+# --------------------------------------------------------------------------- #
+# GraphQL Client                                                              #
+# --------------------------------------------------------------------------- #
 class SubgraphClient:
-    def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+    def __init__(self, retries: int = 3, delay: float = 1.0) -> None:
+        self.retries, self.delay = retries, delay
+        self.headers = {"Content-Type": "application/json"}
+        if k := os.getenv("THE_GRAPH_API_KEY"):
+            self.headers["Authorization"] = f"Bearer {k}"
 
-    def _headers(self):
-        api_key = os.getenv("THE_GRAPH_API_KEY")
-        h = {"Content-Type": "application/json"}
-        if api_key:
-            h["Authorization"] = f"Bearer {api_key}"
-        return h
-
-    def query(
-        self, endpoint: str, query: str, variables: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        payload = {"query": query, "variables": variables or {}}
-        last_err = None
-        for attempt in range(self.max_retries):
+    def query(self, url: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        payload = {"query": query, "variables": variables}
+        err: Exception | None = None
+        for attempt in range(self.retries):
             try:
-                r = requests.post(
-                    endpoint, json=payload, headers=self._headers(), timeout=60
-                )
+                r = requests.post(url, json=payload, headers=self.headers, timeout=60)
                 r.raise_for_status()
                 data = r.json()
                 if "errors" in data:
                     raise RuntimeError(data["errors"])
-                return data.get("data", {})
-            except Exception as e:
-                last_err = e
-                logger.warning(f"GraphQL attempt {attempt+1} failed: {e}")
-                time.sleep(self.retry_delay * (2**attempt))
-        raise RuntimeError(
-            f"GraphQL failed after {self.max_retries} attempts: {last_err}"
-        )
+                return data["data"]
+            except Exception as exc:
+                err = exc
+                logger.warning(f"GQL attempt {attempt+1}/{self.retries} failed: {exc}")
+                time.sleep(self.delay * 2**attempt)
+        raise RuntimeError(err)
 
-    def introspect_fields(self, endpoint: str, type_name: str) -> List[str]:
-        q = """
-        query __introspect($name: String!) {
-          __type(name: $name) { fields { name } }
-        }
-        """
+
+# --------------------------------------------------------------------------- #
+# Disk cache                                                                  #
+# --------------------------------------------------------------------------- #
+class DiskCache:
+    def __init__(self, root: Path, ttl: int) -> None:
+        self.root, self.ttl = root, ttl
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def load(self, key: str) -> Optional[pd.DataFrame]:
+        p = self.root / f"{key}.pkl"
+        if not p.exists() or (time.time() - p.stat().st_mtime) > self.ttl:
+            return None
         try:
-            data = self.query(endpoint, q, {"name": type_name})
-            fields = data.get("__type", {}).get("fields", []) or []
-            return [f["name"] for f in fields if "name" in f]
-        except Exception as e:
-            logger.warning(f"Introspection for {type_name} failed on {endpoint}: {e}")
-            return []
+            return pickle.loads(p.read_bytes())
+        except Exception:
+            return None
+
+    def save(self, key: str, df: pd.DataFrame) -> None:
+        try:
+            (self.root / f"{key}.pkl").write_bytes(pickle.dumps(df))
+        except Exception as exc:
+            logger.warning(f"Cache save failed for {key}: {exc}")
 
 
-# ---------------------------- Schema adapters ----------------------------
-
-
-@dataclass
-class PoolSchema:
-    # names on the Pool type (some may be None/absent)
-    token0_field: Optional[str]
-    token1_field: Optional[str]
-    fee_tier_field: Optional[str]
-    liquidity_field: Optional[str]
-    volume_usd_field: Optional[str]
-    tvl_usd_field: Optional[str]
-    # pool collection field
-    pools_field: str = "pools"
-
-    def has_minimal_tokens(self) -> bool:
-        return (self.token0_field is not None) or (self.token1_field is not None)
-
-
-def detect_pool_schema(
-    client: SubgraphClient, endpoint: str, version: str
-) -> PoolSchema:
-    """Detect v2/v3/v4 Pool-ish fields present on this endpoint."""
-    # v2 doesn't have Pool; it has Pair
-    if version == "v2":
-        return PoolSchema(None, None, None, None, None, None, pools_field="pairs")
-
-    # try v3/v4 Pool
-    pool_fields = set(client.introspect_fields(endpoint, "Pool"))
-    # Some deployments expose Token fields as token0/token1 (classic),
-    # some use currency0/currency1 (observed in explorer example for your v4 Base ID).
-    token0 = None
-    token1 = None
-    if "token0" in pool_fields or "token1" in pool_fields:
-        token0 = "token0" if "token0" in pool_fields else None
-        token1 = "token1" if "token1" in pool_fields else None
-    elif "currency0" in pool_fields or "currency1" in pool_fields:
-        token0 = "currency0" if "currency0" in pool_fields else None
-        token1 = "currency1" if "currency1" in pool_fields else None
-
-    fee_tier = "feeTier" if "feeTier" in pool_fields else None
-    liq = "liquidity" if "liquidity" in pool_fields else None
-    vol_usd = "volumeUSD" if "volumeUSD" in pool_fields else None
-    tvl_usd = "totalValueLockedUSD" if "totalValueLockedUSD" in pool_fields else None
-
-    return PoolSchema(
-        token0, token1, fee_tier, liq, vol_usd, tvl_usd, pools_field="pools"
-    )
-
-
-# ---------------------------- Query builders ----------------------------
-
-
-def build_top_pools_query(schema: PoolSchema, first: int) -> Tuple[str, Dict[str, Any]]:
-    """
-    Build a safe 'top pools' query based on detected fields.
-    Strategy:
-      - Prefer orderBy: volumeUSD if available; else liquidity; else omit orderBy.
-      - Request only fields that exist.
-    """
-    order_by = None
-    if schema.volume_usd_field:
-        order_by = schema.volume_usd_field
-    elif schema.liquidity_field:
-        order_by = schema.liquidity_field
-
-    fields = ["id"]
-    if schema.token0_field:
-        fields.append(f"""{schema.token0_field} {{ id symbol decimals }}""")
-    if schema.token1_field:
-        fields.append(f"""{schema.token1_field} {{ id symbol decimals }}""")
-    if schema.fee_tier_field:
-        fields.append(schema.fee_tier_field)
-    if schema.liquidity_field:
-        fields.append(schema.liquidity_field)
-    if schema.volume_usd_field:
-        fields.append(schema.volume_usd_field)
-    if schema.tvl_usd_field:
-        fields.append(schema.tvl_usd_field)
-
-    fields_block = "\n        ".join(fields)
-
-    if order_by:
-        q = f"""
-        query GetTopPools($first: Int!) {{
-          {schema.pools_field}(
-            first: $first
-            orderBy: {order_by}
-            orderDirection: desc
-          ) {{
-            {fields_block}
-          }}
-        }}
-        """
-    else:
-        q = f"""
-        query GetTopPools($first: Int!) {{
-          {schema.pools_field}(
-            first: $first
-          ) {{
-            {fields_block}
-          }}
-        }}
-        """
-    return q, {"first": first}
-
-
-Q_TOP_PAIRS_V2 = """
-query GetTopPairs($first: Int!) {
-  pairs(
-    first: $first
-    orderBy: volumeUSD
-    orderDirection: desc
-    where: { volumeUSD_gt: "1000" }
-  ) {
-    id
-    token0 { id symbol decimals }
-    token1 { id symbol decimals }
-    reserveUSD
-    volumeUSD
-  }
-}
-"""
-
-# Day data: unified superset; missing fields will be coerced to NaN later.
-Q_POOL_DAYDATA_VX = """
-query GetPoolDayData($poolId: String!, $since: Int!) {
-  poolDayDatas(
-    first: 1000
-    orderBy: date
-    orderDirection: asc
-    where: { pool: $poolId, date_gt: $since }
-  ) {
-    date
-    liquidity
-    sqrtPrice
-    token0Price
-    token1Price
-    volumeToken0
-    volumeToken1
-    volumeUSD
-    tvlUSD
-  }
-}
-"""
-
-Q_PAIR_DAYDATA_V2 = """
-query GetPairDayData($pairAddress: String!, $since: Int!) {
-  pairDayDatas(
-    first: 1000
-    orderBy: date
-    orderDirection: asc
-    where: { pairAddress: $pairAddress, date_gt: $since }
-  ) {
-    date
-    dailyVolumeUSD
-    reserveUSD
-    dailyVolumeToken0
-    dailyVolumeToken1
-  }
-}
-"""
-
-Q_TOKEN_DAYDATA = """
-query GetTokenDayData($tokenId: String!, $since: Int!) {
-  tokenDayDatas(
-    first: 1000
-    orderBy: date
-    orderDirection: asc
-    where: { token: $tokenId, date_gt: $since }
-  ) {
-    date
-    priceUSD
-  }
-}
-"""
-
-
-# ---------------------------- Analyzer ----------------------------
-
-
-class UniswapAnalyzer:
-    # Unified schema for calculate_metrics output and downstream consumers
-    METRICS_COLS = [
-        "date",
-        "chain",
-        "version",
-        "pool_address",
-        "token0",
-        "token1",
-        "feeTier",
-        "y_volume_usd",
-        "liquidity_depth_usd",
-        "vol_pct",
-        "x_liquidity_times_vol",
-        "ratio_volume_over_liquidity_times_vol",
-    ]
-
-    def __init__(self, config: Config):
-        self.config = config
+# --------------------------------------------------------------------------- #
+# Core analyser                                                               #
+# --------------------------------------------------------------------------- #
+class UniswapILVolumeAnalyser:
+    def __init__(self, cfg: Config) -> None:
+        self.cfg = cfg
         self.client = SubgraphClient()
-        self.output_dir = Path(config.OUTPUT_DIR)
-        self.output_dir.mkdir(exist_ok=True)
-        self.cache_dir = self.output_dir / "cache"
-        self.cache_dir.mkdir(exist_ok=True)
+        self.output = Path(cfg.OUTPUT_DIR)
+        self.output.mkdir(exist_ok=True, parents=True)
+        self.cache = DiskCache(self.output / "cache", cfg.CACHE_TTL)
 
-    # ---- Discovery ----
+    # ------------------------------ discovery ------------------------------ #
+    def _url(self, chain: str, version: str) -> str | None:
+        sg = SUBGRAPH_IDS.get(chain, {}).get(version)
+        return f"https://gateway.thegraph.com/api/subgraphs/id/{sg}" if sg else None
 
-    def discover_top_pools(self) -> List[Dict[str, Any]]:
-        logger.info("Discovering top pools across chains/versions…")
-        candidates = []
-        for chain in self.config.CHAINS:
-            for version in self._get_versions_for_chain(chain):
-                endpoint = self._get_subgraph_url(chain, version)
-                if not endpoint:
+    def discover_pools(self) -> list[dict[str, Any]]:
+        if self.cfg.DISCOVERY_MODE == "timeseries":
+            pools = self._discover_pools_timeseries_first()
+            if not pools:
+                logger.warning(
+                    "Timeseries-first discovery returned 0 pools; falling back to entity-first."
+                )
+                pools = self._discover_pools_entity_first()
+            return pools
+        return self._discover_pools_entity_first()
+
+    def _discover_pools_entity_first(self) -> list[dict[str, Any]]:
+        """
+        Lifetime-volume ranking, with optional server-side prefilters on lifetime volumeUSD.
+        """
+        pools: list[dict[str, Any]] = []
+        for chain in self.cfg.CHAINS:
+            for version in SUBGRAPH_IDS.get(chain, {}):
+                url = self._url(chain, version)
+                if not url:
                     continue
                 try:
+                    minv = self.cfg.MIN_DISCOVERY_LIFETIME_VOLUME_USD
+                    maxv = self.cfg.MAX_DISCOVERY_LIFETIME_VOLUME_USD
                     if version == "v2":
-                        data = self.client.query(
-                            endpoint, Q_TOP_PAIRS_V2, {"first": self.config.N_TOP * 3}
+                        where_parts, var_sig = [], []
+                        vars: dict[str, Any] = {"n": self.cfg.N_TOP}
+                        if minv is not None:
+                            where_parts.append("volumeUSD_gte:$minVol")
+                            var_sig.append("$minVol: BigDecimal")
+                            vars["minVol"] = float(minv)
+                        if maxv is not None:
+                            where_parts.append("volumeUSD_lte:$maxVol")
+                            var_sig.append("$maxVol: BigDecimal")
+                            vars["maxVol"] = float(maxv)
+                        where_str = (
+                            f"where:{{{', '.join(where_parts)}}}" if where_parts else ""
                         )
-                        for p in data.get("pairs", []):
-                            candidates.append(
-                                {
-                                    "id": p["id"],
-                                    "chain": chain,
-                                    "version": version,
-                                    "token0": p["token0"],
-                                    "token1": p["token1"],
-                                    "feeTier": 3000,  # unused; kept for uniformity
-                                    "volumeUSD": float(p.get("volumeUSD") or 0),
-                                    "tvlUSD": float(p.get("reserveUSD") or 0),
-                                }
+                        vsig = (", " + ", ".join(var_sig)) if var_sig else ""
+                        q = f"""
+                        query($n:Int!{vsig}) {{
+                          pairs(first:$n, orderBy:volumeUSD, orderDirection:desc {(','+where_str) if where_str else ''}) {{
+                            id reserveUSD volumeUSD
+                            token0{{id symbol}} token1{{id symbol}}
+                          }}
+                        }}"""
+                        rows = self.client.query(url, q, vars).get("pairs", [])
+                        for r in rows:
+                            pools.append(
+                                dict(
+                                    id=r["id"],
+                                    version=version,
+                                    chain=chain,
+                                    token0=r["token0"],
+                                    token1=r["token1"],
+                                )
                             )
-                    else:
-                        schema = detect_pool_schema(self.client, endpoint, version)
-                        q, vars_ = build_top_pools_query(schema, self.config.N_TOP * 3)
-                        data = self.client.query(endpoint, q, vars_)
-                        pools = data.get(schema.pools_field, [])
-                        for pool in pools:
-                            # Tokens may be under token0/1 or currency0/1; both branches return dicts.
-                            # Normalize symbols when available.
-                            t0 = (
-                                pool.get(schema.token0_field)
-                                if schema.token0_field
-                                else None
+                    else:  # v3
+                        where_parts, var_sig = [], []
+                        vars: dict[str, Any] = {"n": self.cfg.N_TOP}
+                        if minv is not None:
+                            where_parts.append("volumeUSD_gte:$minVol")
+                            var_sig.append("$minVol: BigDecimal")
+                            vars["minVol"] = float(minv)
+                        if maxv is not None:
+                            where_parts.append("volumeUSD_lte:$maxVol")
+                            var_sig.append("$maxVol: BigDecimal")
+                            vars["maxVol"] = float(maxv)
+                        where_str = (
+                            f"where:{{{', '.join(where_parts)}}}" if where_parts else ""
+                        )
+                        vsig = (", " + ", ".join(var_sig)) if var_sig else ""
+                        q = f"""
+                        query($n:Int!{vsig}) {{
+                          pools(first:$n, orderBy:volumeUSD, orderDirection:desc {(','+where_str) if where_str else ''}) {{
+                            id totalValueLockedUSD volumeUSD
+                            token0{{id symbol}} token1{{id symbol}}
+                          }}
+                        }}"""
+                        rows = self.client.query(url, q, vars).get("pools", [])
+                        for r in rows:
+                            pools.append(
+                                dict(
+                                    id=r["id"],
+                                    version=version,
+                                    chain=chain,
+                                    token0=r["token0"],
+                                    token1=r["token1"],
+                                )
                             )
-                            t1 = (
-                                pool.get(schema.token1_field)
-                                if schema.token1_field
-                                else None
-                            )
-                            candidates.append(
-                                {
-                                    "id": pool["id"],
-                                    "chain": chain,
-                                    "version": version,
-                                    "token0": (
-                                        t0
-                                        or {
-                                            "id": None,
-                                            "symbol": "NA",
-                                            "decimals": None,
-                                        }
-                                    ),
-                                    "token1": (
-                                        t1
-                                        or {
-                                            "id": None,
-                                            "symbol": "NA",
-                                            "decimals": None,
-                                        }
-                                    ),
-                                    "feeTier": (
-                                        int(pool.get(schema.fee_tier_field) or 0)
-                                        if schema.fee_tier_field
-                                        else 0
-                                    ),
-                                    "volumeUSD": (
-                                        float(pool.get(schema.volume_usd_field) or 0)
-                                        if schema.volume_usd_field
-                                        else 0.0
-                                    ),
-                                    "tvlUSD": (
-                                        float(pool.get(schema.tvl_usd_field) or 0)
-                                        if schema.tvl_usd_field
-                                        else np.nan
-                                    ),
-                                }
-                            )
-                except Exception as e:
-                    logger.error(f"Top pools failed on {chain} {version}: {e}")
-        logger.info(f"Total candidate pools: {len(candidates)}")
-        return candidates
+                except Exception as exc:
+                    logger.error(f"top-pool query failed: {chain} {version}: {exc}")
+        logger.info(f"Discovered {len(pools)} pools (entity-first)")
+        return pools
 
-    def _get_versions_for_chain(self, chain: str) -> List[str]:
-        return list(SUBGRAPH_IDS.get(chain, {}).keys())
+    def _discover_pools_timeseries_first(self) -> list[dict[str, Any]]:
+        """
+        Timeseries-first discovery for BOTH v3 and v2.
+        - v3: poolDayDatas / poolHourDatas (nested pool → token symbols available).
+        - v2: pairDayDatas exposes pairAddress, token0, token1 directly.
+        Downselect to N_TOP by true window volume (sum over day/hour rows).
+        """
+        since = epoch_days_ago(self.cfg.LOOKBACK_DAYS)
+        target_unique = (
+            self.cfg.N_TOP * 50
+        )  # gather many more candidates for better low-volume pool selection
+        pools_accum: dict[tuple[str, str], dict[str, Any]] = (
+            {}
+        )  # (chain,id) -> info + _window_volume
 
-    def _get_subgraph_url(self, chain: str, version: str) -> Optional[str]:
-        subgraph_id = SUBGRAPH_IDS.get(chain, {}).get(version)
-        return get_subgraph_url(subgraph_id) if subgraph_id else None
+        for chain in self.cfg.CHAINS:
+            for version in SUBGRAPH_IDS.get(chain, {}):
+                url = self._url(chain, version)
+                if not url:
+                    continue
 
-    def _generate_cache_key(
-        self, pool_id: str, chain: str, version: str, since_ts: int
-    ) -> str:
-        """Generate a cache key for pool daily data"""
-        key_data = f"{pool_id}_{chain}_{version}_{since_ts}_{self.config.LOOKBACK_DAYS}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+                if version == "v3":
 
-    def _load_cached_data(self, cache_key: str) -> Optional[pd.DataFrame]:
-        """Load cached pool data if it exists and is recent"""
-        cache_file = self.cache_dir / f"{cache_key}.pkl"
-        if not cache_file.exists():
-            return None
+                    def harvest_v3(query: str, key: str) -> None:
+                        skip = 0
+                        PAGE = 1000
+                        while True:
+                            vars = {"ts": since, "first": PAGE, "skip": skip}
+                            data = self.client.query(url, query, vars)
+                            rows = data.get(key, [])
+                            if not rows:
+                                break
+                            for r in rows:
+                                p = r["pool"]
+                                pid = p["id"]
+                                k = (chain, pid)
+                                vol = float(r.get("volumeUSD") or 0.0)
+                                if k not in pools_accum:
+                                    pools_accum[k] = dict(
+                                        id=pid,
+                                        version=version,
+                                        chain=chain,
+                                        token0=p["token0"],
+                                        token1=p["token1"],
+                                        _window_volume=0.0,
+                                    )
+                                pools_accum[k]["_window_volume"] += vol
+                            skip += len(rows)
+                            if len(pools_accum) >= target_unique:
+                                break
 
-        try:
-            # Check if cache is recent (within 1 hour)
-            cache_age = time.time() - cache_file.stat().st_mtime
-            if cache_age > 3600:  # 1 hour
-                return None
+                    q_day = """
+                    query($ts:Int!,$first:Int!,$skip:Int!){
+                      poolDayDatas(first:$first, skip:$skip, orderBy:volumeUSD, orderDirection:asc,
+                                   where:{date_gte:$ts}){
+                        volumeUSD
+                        pool{
+                          id
+                          token0{id symbol}
+                          token1{id symbol}
+                        }
+                      }
+                    }"""
+                    harvest_v3(q_day, "poolDayDatas")
 
-            with open(cache_file, "rb") as f:
-                return pickle.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to load cache {cache_key}: {e}")
-            return None
+                    if len(pools_accum) < self.cfg.N_TOP:
+                        q_hour = """
+                        query($ts:Int!,$first:Int!,$skip:Int!){
+                          poolHourDatas(first:$first, skip:$skip, orderBy:volumeUSD, orderDirection:asc,
+                                        where:{periodStartUnix_gte:$ts}){
+                            volumeUSD
+                            pool{
+                              id
+                              token0{id symbol}
+                              token1{id symbol}
+                            }
+                          }
+                        }"""
+                        harvest_v3(q_hour, "poolHourDatas")
 
-    def _save_cached_data(self, cache_key: str, data: pd.DataFrame):
-        """Save pool data to cache"""
-        cache_file = self.cache_dir / f"{cache_key}.pkl"
-        try:
-            with open(cache_file, "wb") as f:
-                pickle.dump(data, f)
-        except Exception as e:
-            logger.warning(f"Failed to save cache {cache_key}: {e}")
+                else:  # v2
 
-    # ---- Day data fetching ----
+                    def harvest_v2(query: str) -> None:
+                        skip = 0
+                        PAGE = 1000
+                        while True:
+                            vars = {"ts": since, "first": PAGE, "skip": skip}
+                            data = self.client.query(url, query, vars)
+                            rows = data.get("pairDayDatas", [])
+                            if not rows:
+                                break
+                            for r in rows:
+                                pid = r.get("pairAddress")
+                                if not pid:
+                                    # As a fallback, some deployments use id = "<pair>-<day>"
+                                    pid = (r.get("id", "").split("-") or [""])[0]
+                                if not pid:
+                                    continue
+                                k = (chain, pid)
+                                vol = float(r.get("dailyVolumeUSD") or 0.0)
+                                t0 = r.get("token0")
+                                t1 = r.get("token1")
+                                if k not in pools_accum:
+                                    pools_accum[k] = dict(
+                                        id=pid,
+                                        version=version,
+                                        chain=chain,
+                                        token0=t0,
+                                        token1=t1,
+                                        _window_volume=0.0,
+                                    )
+                                else:
+                                    if t0 and not pools_accum[k].get("token0"):
+                                        pools_accum[k]["token0"] = t0
+                                    if t1 and not pools_accum[k].get("token1"):
+                                        pools_accum[k]["token1"] = t1
+                                pools_accum[k]["_window_volume"] += vol
+                            skip += len(rows)
+                            if len(pools_accum) >= target_unique:
+                                break
 
-    def fetch_pool_daily_data(self, pools: List[Dict[str, Any]]) -> pd.DataFrame:
-        logger.info("Fetching daily data…")
-        since_ts = int(
-            (
-                datetime.now(timezone.utc) - timedelta(days=self.config.LOOKBACK_DAYS)
-            ).timestamp()
+                    q_v2 = """
+                    query($ts:Int!,$first:Int!,$skip:Int!){
+                      pairDayDatas(first:$first, skip:$skip, orderBy:dailyVolumeUSD, orderDirection:asc,
+                                   where:{date_gte:$ts}){
+                        id
+                        pairAddress
+                        dailyVolumeUSD
+                        token0{ id symbol }
+                        token1{ id symbol }
+                      }
+                    }"""
+                    harvest_v2(q_v2)
+
+        items = sorted(
+            pools_accum.values(), key=lambda x: x["_window_volume"], reverse=False
         )
-        all_parts: List[pd.DataFrame] = []
+        # Skip the very lowest volume pools (likely bad data) and take from a range
+        # that balances low volume with data quality
+        start_idx = len(items) // 20  # Skip bottom 5%
+        end_idx = start_idx + self.cfg.N_TOP * 2  # Take 2x more than needed
+        candidate_range = items[start_idx:end_idx]
+        picked = candidate_range[: self.cfg.N_TOP]
+        logger.info(
+            f"Discovered {len(picked)} pools (timeseries-first) from {len(pools_accum)} candidates"
+        )
+        for it in picked:
+            it.pop("_window_volume", None)
+        return picked
 
-        # small cache for token day prices
-        token_price_cache: Dict[Tuple[str, int], pd.DataFrame] = {}
+    # ------------------------------ daily data ----------------------------- #
+    def _aggregate_hourly_to_daily(self, dfh: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert poolHourDatas to a daily-like frame compatible with poolDayDatas.
+        We use end-of-day (last observed) prices/tvl and sum volumes over the day.
+        """
+        if dfh.empty:
+            return dfh
 
-        def get_token_prices(
-            endpoint: str, token_id: Optional[str]
-        ) -> Optional[pd.DataFrame]:
-            if not token_id:
-                return None
-            key = (endpoint, hash(token_id))
-            if key in token_price_cache:
-                return token_price_cache[key]
-            try:
-                data = self.client.query(
-                    endpoint, Q_TOKEN_DAYDATA, {"tokenId": token_id, "since": since_ts}
-                )
-                rows = data.get("tokenDayDatas", [])
-                if not rows:
-                    token_price_cache[key] = None
-                    return None
-                dfp = pd.DataFrame(rows)
-                dfp["date"] = pd.to_datetime(dfp["date"], unit="s", utc=True).dt.floor(
-                    "D"
-                )
-                dfp["priceUSD"] = pd.to_numeric(dfp["priceUSD"], errors="coerce")
-                token_price_cache[key] = dfp[["date", "priceUSD"]]
-                return token_price_cache[key]
-            except Exception as e:
-                logger.warning(f"Token price fetch failed for {token_id}: {e}")
-                token_price_cache[key] = None
-                return None
+        for col in [
+            "volumeUSD",
+            "tvlUSD",
+            "token0Price",
+            "token1Price",
+            "sqrtPrice",
+            "periodStartUnix",
+        ]:
+            if col not in dfh:
+                dfh[col] = np.nan
+            dfh[col] = to_num(dfh[col])
 
-        for i, pool in enumerate(tqdm(pools, desc="Fetching pool daily data")):
-            endpoint = self._get_subgraph_url(pool["chain"], pool["version"])
-            if not endpoint:
+        dfh["datetime"] = pd.to_datetime(dfh["periodStartUnix"], unit="s", utc=True)
+        dfh = dfh.sort_values("datetime")
+        dfh["date"] = dfh["datetime"].dt.floor("D")
+
+        def last_non_null(s: pd.Series) -> float:
+            s = s.dropna()
+            return float(s.iloc[-1]) if not s.empty else float("nan")
+
+        daily = dfh.groupby("date", as_index=False).agg(
+            volumeUSD=("volumeUSD", "sum"),
+            tvlUSD=("tvlUSD", last_non_null),
+            token0Price=("token0Price", last_non_null),
+            token1Price=("token1Price", last_non_null),
+            sqrtPrice=("sqrtPrice", last_non_null),
+        )
+        return daily
+
+    def fetch_daily(self, pools: list[dict[str, Any]]) -> pd.DataFrame:
+        if not pools:
+            raise RuntimeError("discovery returned no pools; nothing to fetch")
+        since = epoch_days_ago(self.cfg.LOOKBACK_DAYS)
+        frames: list[pd.DataFrame] = []
+        skipped_missing_ts: list[tuple[str, str]] = []  # (chain, pool_id)
+
+        for p in tqdm(pools, desc="fetch-daily"):
+            url = self._url(p["chain"], p["version"])
+            if not url:
+                continue
+            ck = md5(f"{p['id']}-{since}")
+            if (df := self.cache.load(ck)) is not None:
+                frames.append(df)
                 continue
 
-            # Check cache first
-            cache_key = self._generate_cache_key(
-                pool["id"], pool["chain"], pool["version"], since_ts
-            )
-            cached_data = self._load_cached_data(cache_key)
-            if cached_data is not None:
-                logger.debug(f"Using cached data for pool {pool['id']}")
-                all_parts.append(cached_data)
-                continue
-
             try:
-                if pool["version"] == "v2":
-                    day = self.client.query(
-                        endpoint,
-                        Q_PAIR_DAYDATA_V2,
-                        {"pairAddress": pool["id"], "since": since_ts},
-                    )
-                    rows = day.get("pairDayDatas", [])
-                    if not rows:
-                        continue
+                if p["version"] == "v2":
+                    q = """
+                    query($addr:String!,$ts:Int!){
+                      pairDayDatas(first:1000, orderBy:date, orderDirection:asc,
+                        where:{pairAddress:$addr, date_gte:$ts}){
+                          date
+                          dailyVolumeUSD
+                          reserveUSD
+                          dailyVolumeToken0
+                          dailyVolumeToken1
+                    }}"""
+                    rows = self.client.query(
+                        url, q, {"addr": p["id"], "ts": since}
+                    ).get("pairDayDatas", [])
                     df = pd.DataFrame(rows)
-                    df["date"] = pd.to_datetime(
-                        df["date"], unit="s", utc=True
-                    ).dt.floor("D")
-                    df["volumeUSD"] = pd.to_numeric(
-                        df["dailyVolumeUSD"], errors="coerce"
-                    )
-                    df["tvlUSD"] = pd.to_numeric(df["reserveUSD"], errors="coerce")
-                    # price proxy via daily volumes if both tokens nonzero
+
+                    if df.empty:
+                        skipped_missing_ts.append((p["chain"], p["id"]))
+                        continue
+
+                    for col in [
+                        "dailyVolumeUSD",
+                        "reserveUSD",
+                        "dailyVolumeToken0",
+                        "dailyVolumeToken1",
+                    ]:
+                        if col not in df:
+                            df[col] = np.nan
+                        df[col] = to_num(df[col])
+
                     if (
-                        "dailyVolumeToken0" in df.columns
-                        and "dailyVolumeToken1" in df.columns
+                        "dailyVolumeToken0" in df
+                        and "dailyVolumeToken1" in df
+                        and (
+                            df["dailyVolumeToken0"].notna().any()
+                            or df["dailyVolumeToken1"].notna().any()
+                        )
                     ):
-                        v0 = pd.to_numeric(df["dailyVolumeToken0"], errors="coerce")
-                        v1 = pd.to_numeric(df["dailyVolumeToken1"], errors="coerce")
                         with np.errstate(divide="ignore", invalid="ignore"):
-                            df["token0Price"] = (v1 / v0).replace(
-                                [np.inf, -np.inf], np.nan
+                            df["token0Price"] = (
+                                df["dailyVolumeToken1"] / df["dailyVolumeToken0"]
                             )
                     else:
                         df["token0Price"] = np.nan
 
-                else:
-                    # v3/v4
-                    day = self.client.query(
-                        endpoint,
-                        Q_POOL_DAYDATA_VX,
-                        {"poolId": pool["id"], "since": since_ts},
+                    df["tvlUSD"] = df["reserveUSD"]
+                    df["volumeUSD"] = df["dailyVolumeUSD"]
+
+                else:  # v3
+                    q_day = """
+                    query($id:String!,$ts:Int!){
+                      poolDayDatas(first:1000, orderBy:date, orderDirection:asc,
+                        where:{pool:$id, date_gte:$ts}){
+                          date
+                          volumeUSD
+                          tvlUSD
+                          token0Price
+                          token1Price
+                          sqrtPrice
+                    }}"""
+                    response = self.client.query(
+                        url, q_day, {"id": p["id"], "ts": since}
                     )
-                    rows = day.get("poolDayDatas", [])
-                    if not rows:
-                        continue
+                    rows = response.get("poolDayDatas", [])
                     df = pd.DataFrame(rows)
-                    df["date"] = pd.to_datetime(
-                        df["date"], unit="s", utc=True
-                    ).dt.floor("D")
-                    for col in [
-                        "liquidity",
-                        "sqrtPrice",
-                        "token0Price",
-                        "token1Price",
-                        "volumeToken0",
-                        "volumeToken1",
-                        "volumeUSD",
-                        "tvlUSD",
-                    ]:
-                        if col in df.columns:
-                            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-                    # rebuild volumeUSD if absent
-                    if ("volumeUSD" not in df.columns) or df["volumeUSD"].isna().all():
-                        t0_id = pool["token0"].get("id")
-                        t1_id = pool["token1"].get("id")
-                        px0 = get_token_prices(endpoint, t0_id)
-                        px1 = get_token_prices(endpoint, t1_id)
-                        if (
-                            px0 is not None
-                            and px1 is not None
-                            and "volumeToken0" in df.columns
-                            and "volumeToken1" in df.columns
-                        ):
-                            m = df.merge(
-                                px0, on="date", how="left", suffixes=("", "_t0")
-                            )
-                            m = m.rename(columns={"priceUSD": "priceUSD_t0"})
-                            m = m.merge(
-                                px1, on="date", how="left", suffixes=("", "_t1")
-                            )
-                            m = m.rename(columns={"priceUSD": "priceUSD_t1"})
-                            df["volumeUSD"] = (
-                                m["volumeToken0"] * m["priceUSD_t0"]
-                                + m["volumeToken1"] * m["priceUSD_t1"]
-                            )
-
-                # metadata
-                df["pool_id"] = pool["id"]
-                df["chain"] = pool["chain"]
-                df["version"] = pool["version"]
-                df["token0_symbol"] = pool["token0"].get("symbol", "NA")
-                df["token1_symbol"] = pool["token1"].get("symbol", "NA")
-                df["feeTier"] = pool.get("feeTier", 0)
-
-                # Cache the processed data
-                self._save_cached_data(cache_key, df)
-                all_parts.append(df)
-
-            except Exception as e:
-                logger.error(
-                    f"Daily data failed for {pool['chain']} {pool['version']} {pool['id']}: {e}"
-                )
-
-        if not all_parts:
-            raise RuntimeError("No daily data fetched")
-        return pd.concat(all_parts, ignore_index=True)
-
-    # ---- Daily metrics (volume, depth, vol) ----
-
-    def _rolling_vol(self, prices: pd.Series, window: int) -> pd.Series:
-        prices = prices.replace([np.inf, -np.inf], np.nan).dropna()
-        logret = np.log(prices / prices.shift(1))
-        return logret.rolling(window=window).std()
-
-    def _active_depth(self, pool_data: pd.DataFrame) -> pd.Series:
-        # Until tick math: treat TVL as depth proxy if present, else NaN
-        return pd.to_numeric(pool_data.get("tvlUSD"), errors="coerce")
-
-    def _derive_midprice_from_sqrt(self, g: pd.DataFrame) -> Optional[pd.Series]:
-        """
-        If sqrtPrice (Q64.96) is present and usable, compute midprice = (sqrtPrice / 2**96)**2
-        Returns a Series indexed by date or None.
-        """
-        if "sqrtPrice" not in g.columns or g["sqrtPrice"].notna().sum() < 3:
-            return None
-        q96 = g.set_index("date")["sqrtPrice"].astype(float)
-        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-            mid = (q96 / (2.0**96)) ** 2
-        return mid.replace([np.inf, -np.inf], np.nan).dropna()
-
-    def calculate_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
-        logger.info("Computing daily metrics…")
-        out = []
-
-        # Define the output schema once so we can return an empty DF with columns if needed
-        cols = list(self.METRICS_COLS)
-
-        for pool_id, g in df.groupby("pool_id"):
-            g = g.sort_values("date")
-            meta = g.iloc[0]
-
-            # ---- robust price selection (token0Price -> 1/token1Price -> sqrtPrice-derived) ----
-            price_series = None
-            if "token0Price" in g.columns and g["token0Price"].notna().sum() >= 3:
-                price_series = g.set_index("date")["token0Price"].astype(float)
-            elif "token1Price" in g.columns and g["token1Price"].notna().sum() >= 3:
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    price_series = 1.0 / g.set_index("date")["token1Price"].astype(
-                        float
-                    )
-            else:
-                price_series = self._derive_midprice_from_sqrt(g)
-
-            if price_series is None:
-                continue
-
-            price = price_series.replace([np.inf, -np.inf], np.nan).dropna()
-            vol = self._rolling_vol(price, self.config.VOL_WINDOW)
-            depth = self._active_depth(g)
-
-            g2 = g.set_index("date").copy()
-            g2["vol_pct"] = vol * 100.0
-            g2["liquidity_depth_usd"] = depth
-            g2["y_volume_usd"] = pd.to_numeric(g2.get("volumeUSD"), errors="coerce")
-            g2["x_liquidity_times_vol"] = g2["liquidity_depth_usd"] * (
-                g2["vol_pct"] / 100.0
-            )
-            g2 = g2.dropna(subset=["vol_pct", "liquidity_depth_usd", "y_volume_usd"])
-            if g2.empty:
-                continue
-
-            g2 = g2.reset_index()
-            g2["chain"] = meta["chain"]
-            g2["version"] = meta["version"]
-            g2["pool_address"] = pool_id
-            g2["token0"] = meta["token0_symbol"]
-            g2["token1"] = meta["token1_symbol"]
-            with np.errstate(divide="ignore", invalid="ignore"):
-                g2["ratio_volume_over_liquidity_times_vol"] = (
-                    g2["y_volume_usd"] / g2["x_liquidity_times_vol"]
-                )
-            out.append(g2[cols])
-
-        # Critical: preserve schema even when empty to avoid KeyError downstream
-        return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=cols)
-
-    # ---- Monthly IL via sampling (fees excluded) ----
-
-    @staticmethod
-    def _il_percent(R: float) -> float:
-        if R is None or not np.isfinite(R) or R <= 0:
-            return np.nan
-        return (2.0 * np.sqrt(R) / (1.0 + R)) - 1.0
-
-    def _month_days(self, month_str: str) -> int:
-        p = pd.Period(month_str, freq="M")
-        return p.days_in_month
-
-    def calculate_monthly_il_sampled(self, raw_daily: pd.DataFrame) -> pd.DataFrame:
-        df = raw_daily.copy()
-        df["date"] = pd.to_datetime(df["date"], utc=True)
-        df["day"] = df["date"].dt.floor("D")
-        df["month"] = df["date"].dt.to_period("M").astype(str)
-
-        for c in [
-            "token0Price",
-            "token1Price",
-            "tvlUSD",
-            "reserveUSD",
-            "volumeUSD",
-            "sqrtPrice",
-        ]:
-            if c in df.columns:
-                df[c] = pd.to_numeric(df[c], errors="coerce")
-
-        # Build a robust daily price (prefer token0Price, else 1/token1Price, else sqrtPrice-derived)
-        def robust_daily_price(g: pd.DataFrame) -> Optional[pd.Series]:
-            if "token0Price" in g.columns and g["token0Price"].notna().sum() >= 2:
-                s = (
-                    g.dropna(subset=["token0Price"])
-                    .set_index("day")["token0Price"]
-                    .astype(float)
-                )
-                return s if not s.empty else None
-            if "token1Price" in g.columns and g["token1Price"].notna().sum() >= 2:
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    s = 1.0 / g.dropna(subset=["token1Price"]).set_index("day")[
-                        "token1Price"
-                    ].astype(float)
-                s = s.replace([np.inf, -np.inf], np.nan).dropna()
-                return s if not s.empty else None
-            # sqrtPrice path
-            if "sqrtPrice" in g.columns and g["sqrtPrice"].notna().sum() >= 2:
-                q = (
-                    g.dropna(subset=["sqrtPrice"])
-                    .set_index("day")["sqrtPrice"]
-                    .astype(float)
-                )
-                with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-                    s = (q / (2.0**96)) ** 2
-                s = s.replace([np.inf, -np.inf], np.nan).dropna()
-                return s if not s.empty else None
-            return None
-
-        rows = []
-        h = max(1, int(self.config.IL_SAMPLE_HORIZON_DAYS))
-        step = max(1, int(self.config.IL_SAMPLE_STEP_DAYS))
-
-        for (pool_id, month), g in df.groupby(["pool_id", "month"]):
-            g = g.sort_values("day")
-            version = g.iloc[0]["version"]
-            chain = g.iloc[0]["chain"]
-            token0 = g.iloc[0]["token0_symbol"]
-            token1 = g.iloc[0]["token1_symbol"]
-            feeTier = int(g.iloc[0]["feeTier"])
-
-            tvl_series = g["reserveUSD"] if version == "v2" else g.get("tvlUSD")
-            tvl_avg = (
-                float(pd.to_numeric(tvl_series, errors="coerce").dropna().mean())
-                if tvl_series is not None
-                else np.nan
-            )
-
-            day_price = robust_daily_price(g)
-            if day_price is None or day_price.empty:
-                continue
-
-            days = list(day_price.index.unique())
-            days_set = set(days)
-            samples = []
-            idx = 0
-            while idx < len(days):
-                d0 = days[idx]
-                d1 = d0 + pd.Timedelta(days=h)
-                if d1 in days_set:
-                    p0 = float(day_price.loc[d0])
-                    p1 = float(day_price.loc[d1])
-                    if np.isfinite(p0) and np.isfinite(p1) and p0 > 0 and p1 > 0:
-                        samples.append(self._il_percent(p1 / p0))
-                idx += step
-
-            W = self._month_days(month)
-            if len(samples) >= self.config.IL_MIN_SAMPLES_PER_MONTH:
-                il_per_h = float(np.nanmean(samples)) if len(samples) else np.nan
-                il_month_pct = il_per_h * (W / h) if np.isfinite(il_per_h) else np.nan
-                method = "sampled"
-                n_samples = len(samples)
-            else:
-                il_month_pct = np.nan
-                n_samples = len(samples)
-                method = "insufficient_samples"
-                if self.config.IL_FALLBACK_TO_ENDPOINT:
-                    try:
-                        p0 = float(day_price.dropna().iloc[0])
-                        p1 = float(day_price.dropna().iloc[-1])
-                        il_month_pct = (
-                            self._il_percent(p1 / p0)
-                            if p0 > 0 and np.isfinite(p0) and np.isfinite(p1)
-                            else np.nan
+                    if df.empty:
+                        q_hour = """
+                        query($id:String!,$ts:Int!){
+                          poolHourDatas(first:1000, orderBy:periodStartUnix, orderDirection:asc,
+                            where:{pool:$id, periodStartUnix_gte:$ts}){
+                              periodStartUnix
+                              volumeUSD
+                              tvlUSD
+                              token0Price
+                              token1Price
+                              sqrtPrice
+                        }}"""
+                        resp_h = self.client.query(
+                            url, q_hour, {"id": p["id"], "ts": since}
                         )
-                        method = "endpoint_fallback"
-                    except Exception:
-                        il_month_pct = np.nan
+                        rows_h = resp_h.get("poolHourDatas", [])
+                        dfh = pd.DataFrame(rows_h)
+                        if dfh.empty:
+                            skipped_missing_ts.append((p["chain"], p["id"]))
+                            continue
+                        df = self._aggregate_hourly_to_daily(dfh)
+                        for col in [
+                            "volumeUSD",
+                            "tvlUSD",
+                            "token0Price",
+                            "token1Price",
+                            "sqrtPrice",
+                        ]:
+                            if col not in df:
+                                df[col] = np.nan
+                            df[col] = to_num(df[col])
+                    else:
+                        for col in [
+                            "volumeUSD",
+                            "tvlUSD",
+                            "token0Price",
+                            "token1Price",
+                            "sqrtPrice",
+                        ]:
+                            if col not in df:
+                                df[col] = np.nan
+                            df[col] = to_num(df[col])
 
-            il_month_usd = (
-                il_month_pct * tvl_avg
-                if (np.isfinite(il_month_pct) and np.isfinite(tvl_avg))
-                else np.nan
+                # common normalization
+                if "date" not in df:
+                    raise RuntimeError("expected 'date' column after normalization")
+                df["date"] = pd.to_datetime(df["date"], unit="s", utc=True).dt.floor(
+                    "D"
+                )
+                df["pool_id"] = p["id"]
+                df["chain"], df["version"] = p["chain"], p["version"]
+                df["token0_symbol"] = (p.get("token0") or {}).get("symbol", "?")
+                df["token1_symbol"] = (p.get("token1") or {}).get("symbol", "?")
+
+                self.cache.save(ck, df)
+                frames.append(df)
+
+            except Exception as exc:
+                logger.warning(f"daily fetch failed {p['id']}: {exc}")
+
+        if skipped_missing_ts:
+            eg = ", ".join([f"{c}:{pid}" for c, pid in skipped_missing_ts[:5]])
+            logger.info(
+                f"Skipped {len(skipped_missing_ts)} pools with no day/hour data since {since} "
+                f"(e.g., {eg} …)"
             )
-            rows.append(
+        if not frames:
+            raise RuntimeError("no daily data fetched")
+        return pd.concat(frames, ignore_index=True)
+
+    # ------------------------------ IL calc -------------------------------- #
+    @staticmethod
+    def _il_pct(price_ratio: pd.Series | np.ndarray | float) -> pd.Series | float:
+        """
+        Impermanent-loss percentage for a constant-product LP.
+
+        Parameters
+        ----------
+        price_ratio : float | pd.Series | np.ndarray
+            p₁ / p₀ (new price divided by old price)
+
+        Returns
+        -------
+        Same type as `price_ratio` containing IL%, with NaN where the
+        ratio is non-positive or non-finite.
+        """
+        pr = np.asarray(price_ratio, dtype=float)
+        il = (2 * np.sqrt(pr) / (1 + pr)) - 1
+        il[(pr <= 0) | (~np.isfinite(pr))] = np.nan
+        if isinstance(price_ratio, pd.Series):
+            return pd.Series(il, index=price_ratio.index)
+        return il
+
+    def build_metrics(self, daily: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        rows: list[pd.DataFrame] = []
+        skipped_stable = 0
+        for pid, df in daily.groupby("pool_id"):
+            df = df.sort_values("date")
+
+            # Choose a price series in order of preference, requiring >=2 valid points.
+            price: Optional[pd.Series] = None
+            if "token0Price" in df and df["token0Price"].notna().sum() >= 2:
+                price = df.set_index("date")["token0Price"].astype(float)
+            elif "token1Price" in df and df["token1Price"].notna().sum() >= 2:
+                price = 1.0 / df.set_index("date")["token1Price"].astype(float)
+            elif "sqrtPrice" in df and df["sqrtPrice"].notna().sum() >= 2:
+                q96 = df.set_index("date")["sqrtPrice"].astype(float)
+                price = (q96 / 2**96) ** 2
+
+            if price is None:
+                continue
+
+            price = price.replace([np.inf, -np.inf], np.nan).dropna()
+            if price.size < 2:
+                continue
+
+            # Exclude stable↔stable pools by median price ~ 1
+            med_price = float(np.nanmedian(price.values))
+            if (
+                np.isfinite(med_price)
+                and abs(med_price - 1.0) <= self.cfg.STABLE_PRICE_EPS
+            ):
+                skipped_stable += 1
+                continue
+
+            required_cols = {"volumeUSD", "tvlUSD"}
+            if not required_cols.issubset(df.columns):
+                continue
+
+            vol = df.set_index("date").reindex(price.index)["volumeUSD"].astype(float)
+            tvl = df.set_index("date").reindex(price.index)["tvlUSD"].astype(float)
+
+            if vol.notna().sum() == 0 or tvl.notna().sum() == 0:
+                continue
+
+            il_pct = self._il_pct(price / price.shift(1))
+            il_usd = il_pct * tvl
+
+            metric_df = pd.DataFrame(
                 {
-                    "pool_id": pool_id,
-                    "chain": chain,
-                    "version": version,
-                    "token0": token0,
-                    "token1": token1,
-                    "feeTier": feeTier,
-                    "month": month,
-                    "calendar_days": W,
-                    "il_method": method,
-                    "n_il_samples": n_samples,
-                    "il_pct_month": (
-                        float(il_month_pct) if np.isfinite(il_month_pct) else np.nan
-                    ),  # negative = loss
-                    "tvl_usd_month_avg": (
-                        float(tvl_avg) if np.isfinite(tvl_avg) else np.nan
-                    ),
-                    "il_usd_month": (
-                        float(il_month_usd) if np.isfinite(il_month_usd) else np.nan
-                    ),  # negative = loss $
+                    "date": price.index,
+                    "pool_id": pid,
+                    "volume_usd": vol,
+                    "il_usd": il_usd,
+                    "chain": df["chain"].iloc[0],
+                    "version": df["version"].iloc[0],
+                    "pair": df["token0_symbol"].iloc[0]
+                    + "/"
+                    + df["token1_symbol"].iloc[0],
+                    "median_price": med_price,
                 }
+            ).dropna(subset=["volume_usd", "il_usd"])
+
+            if not metric_df.empty:
+                rows.append(metric_df)
+
+        if skipped_stable:
+            logger.info(
+                f"Excluded {skipped_stable} pools as stable↔stable (median price ≈ 1)"
             )
-        return pd.DataFrame(rows)
 
-    # ---- Ranking / summary / viz ----
+        if not rows:
+            raise RuntimeError("no pools with valid IL + volume data")
+        daily_metrics = pd.concat(rows, ignore_index=True)
 
-    def rank_and_filter_pools(self, df: pd.DataFrame) -> pd.DataFrame:
-        logger.info("Ranking & filtering by 30d volume…")
-
-        required = {"pool_address", "y_volume_usd", "liquidity_depth_usd", "vol_pct"}
-        if df is None or df.empty or not required.issubset(df.columns):
-            logger.warning("No valid daily metrics to rank; returning empty result.")
-            return pd.DataFrame(columns=self.METRICS_COLS)
-
-        pool_vols = (
-            df.groupby("pool_address")["y_volume_usd"]
-            .sum()
-            .sort_values(ascending=False)
+        agg = daily_metrics.groupby(
+            ["pool_id", "pair", "chain", "version"], as_index=False
+        ).agg(
+            avg_daily_volume_usd=("volume_usd", "mean"),
+            avg_daily_il_usd=("il_usd", lambda s: float(np.mean(np.abs(s)))),
+            median_price=("median_price", "median"),
+            n_days=("il_usd", "count"),
         )
-        keep = set(pool_vols.head(self.config.N_TOP).index)
-        out = df[df["pool_address"].isin(keep)].copy()
-        out = out[
-            (out["y_volume_usd"] > 0)
-            & (out["liquidity_depth_usd"] > 0)
-            & (out["vol_pct"] >= self.config.MIN_VOLATILITY * 100)
-        ]
+
+        agg = agg[agg["avg_daily_il_usd"] > self.cfg.MIN_AVG_ABS_IL_USD].copy()
+
+        if self.cfg.MIN_AVG_DAILY_VOLUME_USD is not None:
+            agg = agg[
+                agg["avg_daily_volume_usd"] >= float(self.cfg.MIN_AVG_DAILY_VOLUME_USD)
+            ]
+        if self.cfg.MAX_AVG_DAILY_VOLUME_USD is not None:
+            agg = agg[
+                agg["avg_daily_volume_usd"] <= float(self.cfg.MAX_AVG_DAILY_VOLUME_USD)
+            ]
+
+        agg["il_per_1k_volume"] = (
+            agg["avg_daily_il_usd"] / agg["avg_daily_volume_usd"]
+        ) * 1000.0
+        agg = agg[np.isfinite(agg["il_per_1k_volume"]) & (agg["il_per_1k_volume"] > 0)]
+
+        survivors = set(agg["pool_id"].unique())
+        daily_metrics = daily_metrics[daily_metrics["pool_id"].isin(survivors)].copy()
+
+        return daily_metrics, agg
+
+    # ------------------------------ outliers ------------------------------- #
+    def filter_outliers(
+        self, per_pool: pd.DataFrame, ratio_col: str = "il_per_1k_volume"
+    ) -> pd.DataFrame:
+        if per_pool.empty or ratio_col not in per_pool:
+            return per_pool
+        s_raw = per_pool[ratio_col].astype(float)
+        if (s_raw < 0).any():
+            logger.warning(f"{ratio_col} contains negative values; check pipeline.")
+        lo, hi = mad_bounds_log(s_raw, k=self.cfg.MAD_K)
+        lo = max(0.0, lo)
+        before = per_pool.shape[0]
+        filtered = per_pool[(s_raw >= lo) & (s_raw <= hi)].copy()
+        removed = before - filtered.shape[0]
         logger.info(
-            f"Final daily dataset: {len(out)} rows from {out['pool_address'].nunique()} pools"
+            f"Outlier removal ({ratio_col}, log-MAD k={self.cfg.MAD_K}): "
+            f"kept [{lo:.4g}, {hi:.4g}] → removed {removed}/{before}"
         )
-        return out
+        return filtered
 
-    def calculate_summary_stats(self, df: pd.DataFrame) -> Dict[str, Any]:
-        if df is None or df.empty:
-            return {
-                "number_of_pools": 0,
-                "number_of_days": 0,
-                "mean_ratio": np.nan,
-                "median_ratio": np.nan,
-                "trimmed_mean_ratio_1pct": np.nan,
-                "correlation_logx_logy": np.nan,
-                "ols_slope_log_log": np.nan,
-                "analysis_date": datetime.now(timezone.utc).isoformat(),
-                "config": {
-                    "lookback_days": self.config.LOOKBACK_DAYS,
-                    "vol_window": self.config.VOL_WINDOW,
-                    "il_sample_horizon_days": self.config.IL_SAMPLE_HORIZON_DAYS,
-                    "il_sample_step_days": self.config.IL_SAMPLE_STEP_DAYS,
-                    "il_min_samples_per_month": self.config.IL_MIN_SAMPLES_PER_MONTH,
-                    "fees_included": False,
-                },
-            }
-
-        ratios = (
-            df["ratio_volume_over_liquidity_times_vol"]
-            .replace([np.inf, -np.inf], np.nan)
-            .dropna()
-        )
-
-        def safe_q(s: pd.Series, q: float) -> float:
-            try:
-                return float(s.quantile(q))
-            except Exception:
-                return np.nan
-
-        lower = safe_q(ratios, self.config.TRIM_PERCENTILE)
-        upper = safe_q(ratios, 1 - self.config.TRIM_PERCENTILE)
-        trimmed = (
-            ratios
-            if (np.isnan(lower) or np.isnan(upper))
-            else ratios.clip(lower=lower, upper=upper)
-        )
-
-        x = np.log10(df["x_liquidity_times_vol"].replace(0, np.nan))
-        y = np.log10(df["y_volume_usd"].replace(0, np.nan))
-        common = x.dropna().index.intersection(y.dropna().index)
-        corr = (
-            np.corrcoef(x.loc[common], y.loc[common])[0, 1]
-            if len(common) > 1
-            else np.nan
-        )
-        slope = (
-            np.polyfit(x.loc[common], y.loc[common], 1)[0]
-            if len(common) > 1
-            else np.nan
-        )
-        return {
-            "number_of_pools": (
-                int(df["pool_address"].nunique()) if "pool_address" in df.columns else 0
-            ),
-            "number_of_days": int(len(df)),
-            "mean_ratio": float(ratios.mean()) if len(ratios) else np.nan,
-            "median_ratio": float(ratios.median()) if len(ratios) else np.nan,
-            "trimmed_mean_ratio_1pct": (
-                float(trimmed.mean()) if len(trimmed) else np.nan
-            ),
-            "correlation_logx_logy": float(corr) if np.isfinite(corr) else np.nan,
-            "ols_slope_log_log": float(slope) if np.isfinite(slope) else np.nan,
-            "analysis_date": datetime.now(timezone.utc).isoformat(),
-            "config": {
-                "lookback_days": self.config.LOOKBACK_DAYS,
-                "vol_window": self.config.VOL_WINDOW,
-                "il_sample_horizon_days": self.config.IL_SAMPLE_HORIZON_DAYS,
-                "il_sample_step_days": self.config.IL_SAMPLE_STEP_DAYS,
-                "il_min_samples_per_month": self.config.IL_MIN_SAMPLES_PER_MONTH,
-                "fees_included": False,
-            },
-        }
-
-    def create_plots(self, df: pd.DataFrame, summary: Dict[str, Any]):
-        logger.info("Rendering scatter plots…")
-        if df is None or df.empty:
-            logger.warning("No data to plot; creating empty scaffold figure.")
-            fig = plt.figure(figsize=(10, 6))
-            plt.text(0.5, 0.5, "No data available", ha="center", va="center")
-            plt.axis("off")
-            plt.savefig(self.output_dir / "scatter.png", dpi=300, bbox_inches="tight")
-            plt.close()
+    # ------------------------------ plots ---------------------------------- #
+    def _plots(self, agg: pd.DataFrame) -> None:
+        if agg.empty:
             return
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-        colors = {"v2": "tab:red", "v3": "tab:blue", "v4": "tab:green"}
-
-        for ver, g in df.groupby("version"):
-            ax1.scatter(
-                g["x_liquidity_times_vol"],
-                g["y_volume_usd"],
-                s=16,
-                alpha=0.6,
-                c=colors.get(ver, "gray"),
-                label=f"{ver}",
-            )
-        ax1.set_xlabel("Liquidity Depth × Volatility (USD)")
-        ax1.set_ylabel("Volume (USD)")
-        ax1.set_title("Volume vs (Liquidity × Volatility)")
-        ax1.legend()
-        ax1.grid(alpha=0.3)
-
-        for ver, g in df.groupby("version"):
-            g2 = g[(g["x_liquidity_times_vol"] > 0) & (g["y_volume_usd"] > 0)]
-            ax2.scatter(
-                g2["x_liquidity_times_vol"],
-                g2["y_volume_usd"],
-                s=16,
-                alpha=0.6,
-                c=colors.get(ver, "gray"),
-                label=f"{ver}",
-            )
-        ax2.set_xscale("log")
-        ax2.set_yscale("log")
-        ax2.set_xlabel("Liquidity Depth × Volatility (USD)")
-        ax2.set_ylabel("Volume (USD)")
-        ax2.set_title("Log-Log")
-        ax2.grid(alpha=0.3)
-        if np.isfinite(summary.get("mean_ratio", np.nan)):
-            xlim = ax2.get_xlim()
-            ax2.plot(
-                xlim,
-                [x * summary["mean_ratio"] for x in xlim],
-                "k--",
-                alpha=0.5,
-                label=f"Avg ratio = {summary['mean_ratio']:.2e}",
-            )
-            ax2.legend()
-
-        plt.tight_layout()
-        plt.savefig(self.output_dir / "scatter.png", dpi=300, bbox_inches="tight")
-        plt.close()
-
-    def save_results(
-        self, daily_df: pd.DataFrame, monthly_il: pd.DataFrame, summary: Dict[str, Any]
-    ):
-        self.output_dir.mkdir(exist_ok=True)
-        daily_df.to_csv(self.output_dir / "pool_metrics_daily.csv", index=False)
-        daily_df.to_parquet(self.output_dir / "pool_metrics_daily.parquet", index=False)
-        monthly_il.to_csv(self.output_dir / "pool_metrics_monthly_il.csv", index=False)
-        with open(self.output_dir / "summary.json", "w") as f:
-            json.dump(summary, f, indent=2)
-        logger.info(f"Saved to {self.output_dir}")
-
-    # ---- Pipeline ----
-
-    def run_analysis(self):
-        logger.info("Starting analysis…")
-        pools = self.discover_top_pools()
-        raw_daily = self.fetch_pool_daily_data(pools)
-        daily_metrics = self.calculate_metrics(raw_daily)
-        final_daily = self.rank_and_filter_pools(daily_metrics)
-        keep_ids = (
-            set(final_daily["pool_address"].unique())
-            if not final_daily.empty
-            else set()
+        agg_sorted = agg.sort_values("il_per_1k_volume", ascending=False)
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.bar(
+            x=np.arange(len(agg_sorted)),
+            height=agg_sorted["il_per_1k_volume"],
         )
-        # If nothing passed the filters, monthly IL over keep_ids will be empty; still safe.
-        monthly_il = self.calculate_monthly_il_sampled(
-            raw_daily[raw_daily["pool_id"].isin(keep_ids)]
-            if keep_ids
-            else raw_daily.iloc[0:0]
-        )
-        summary = self.calculate_summary_stats(final_daily)
-        self.create_plots(final_daily, summary)
-        self.save_results(final_daily, monthly_il, summary)
-        logger.info("Done.")
+        ax.set_xticks(np.arange(len(agg_sorted)))
+        ax.set_xticklabels(agg_sorted["pair"], rotation=90, fontsize=6)
+        ax.set_ylabel("USD |IL| per $1,000 of daily volume")
+        ax.set_title("IL per $1k daily volume (per pool, averaged over lookback)")
+        ax.set_yscale("log")
+        fig.tight_layout()
+        fig.savefig(self.output / "bar_il_per_1k_volume.png", dpi=300)
+        plt.close(fig)
+
+    # ------------------------------ run ------------------------------------ #
+    def run(self) -> None:
+        pools = self.discover_pools()
+        if not pools:
+            raise RuntimeError(
+                "discovery returned no pools; try different chains or discovery mode."
+            )
+        daily = self.fetch_daily(pools)
+        daily_metrics, per_pool = self.build_metrics(daily)
+
+        per_pool_filtered = self.filter_outliers(per_pool, ratio_col="il_per_1k_volume")
+
+        summary = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "n_pools_total": int(per_pool.shape[0]),
+            "n_pools_after_filter": int(per_pool_filtered.shape[0]),
+            "mean_il_per_1k_volume": (
+                float(per_pool_filtered["il_per_1k_volume"].mean())
+                if not per_pool_filtered.empty
+                else float("nan")
+            ),
+            "median_il_per_1k_volume": (
+                float(per_pool_filtered["il_per_1k_volume"].median())
+                if not per_pool_filtered.empty
+                else float("nan")
+            ),
+            "p90_il_per_1k_volume": (
+                float(np.nanpercentile(per_pool_filtered["il_per_1k_volume"], 90))
+                if not per_pool_filtered.empty
+                else float("nan")
+            ),
+        }
+        logger.info(json.dumps(summary, indent=2))
+
+        self._plots(per_pool_filtered)
+
+        daily_metrics.to_parquet(self.output / "daily_metrics.parquet", index=False)
+        per_pool.to_csv(self.output / "per_pool_metrics_raw.csv", index=False)
+        per_pool_filtered.to_csv(self.output / "per_pool_metrics.csv", index=False)
+        (self.output / "summary.json").write_text(json.dumps(summary, indent=2))
+        logger.success(f"Results saved to {self.output}")
 
 
-# ---------------------------- CLI ----------------------------
-
-
-def main():
-    import argparse
-
-    p = argparse.ArgumentParser(
-        description="Uniswap Volume vs Liquidity×Volatility + Sampled Monthly IL%/$ (fees excluded)"
-    )
-    p.add_argument("--n-top", type=int, default=30)
-    p.add_argument("--lookback-days", type=int, default=30)
+# --------------------------------------------------------------------------- #
+# CLI                                                                         #
+# --------------------------------------------------------------------------- #
+def main() -> None:
+    p = argparse.ArgumentParser(description="Volume vs IL analysis for Uniswap pools")
+    p.add_argument("--n-top", type=int, default=100)
+    p.add_argument("--lookback-days", type=int, default=60)
     p.add_argument("--chains", nargs="+", default=["mainnet", "base"])
-    p.add_argument("--vol-window", type=int, default=7)
-    p.add_argument("--il-sample-horizon-days", type=int, default=1)
-    p.add_argument("--il-sample-step-days", type=int, default=1)
-    p.add_argument("--il-min-samples-per-month", type=int, default=5)
-    p.add_argument(
-        "--no-endpoint-fallback",
-        action="store_true",
-        help="If set, months with insufficient samples yield NaN IL instead of endpoint fallback",
-    )
     p.add_argument("--output-dir", default="output")
-    p.add_argument("--fast", action="store_true")
+    p.add_argument(
+        "--stable-price-eps",
+        type=float,
+        default=0.03,
+        help="Exclude pools with median price within [1±eps]",
+    )
+    p.add_argument(
+        "--min-avg-abs-il-usd",
+        type=float,
+        default=1e-6,
+        help="Drop pools whose avg |IL| is below this USD",
+    )
+    p.add_argument(
+        "--mad-k",
+        type=float,
+        default=2.5,
+        help="Log-MAD fence multiplier for outlier removal on il_per_1k_volume",
+    )
+    p.add_argument(
+        "--discovery-mode",
+        choices=["timeseries", "entity"],
+        default="timeseries",
+        help="Use day/hour entities to discover pools with in-window rows ('timeseries'), or lifetime volume ranking ('entity').",
+    )
+    p.add_argument(
+        "--min-discovery-lifetime-volume-usd",
+        type=float,
+        default=None,
+        help="Server-side prefilter on lifetime volumeUSD during entity-first discovery (optional).",
+    )
+    p.add_argument(
+        "--max-discovery-lifetime-volume-usd",
+        type=float,
+        default=None,
+        help="Server-side upper bound prefilter on lifetime volumeUSD during entity-first discovery (optional).",
+    )
+    p.add_argument(
+        "--min-avg-daily-volume-usd",
+        type=float,
+        default=None,
+        help="Exact filter on computed avg daily volume over lookback (no estimation).",
+    )
+    p.add_argument(
+        "--max-avg-daily-volume-usd",
+        type=float,
+        default=None,
+        help="Exact upper filter on computed avg daily volume over lookback (no estimation).",
+    )
+
     args = p.parse_args()
 
-    config = Config(
-        N_TOP=args.n_top,
-        LOOKBACK_DAYS=args.lookback_days,
-        CHAINS=args.chains,
-        VOL_WINDOW=args.vol_window,
-        OUTPUT_DIR=args.output_dir,
-        USE_FAST_APPROXIMATION=args.fast,
-        IL_SAMPLE_HORIZON_DAYS=args.il_sample_horizon_days,
-        IL_SAMPLE_STEP_DAYS=args.il_sample_step_days,
-        IL_MIN_SAMPLES_PER_MONTH=args.il_min_samples_per_month,
-        IL_FALLBACK_TO_ENDPOINT=not args.no_endpoint_fallback,
+    cfg = Config(
+        n_top=args.n_top,
+        lookback_days=args.lookback_days,
+        chains=args.chains,
+        output_dir=args.output_dir,
+        stable_price_eps=args.stable_price_eps,
+        min_avg_abs_il_usd=args.min_avg_abs_il_usd,
+        mad_k=args.mad_k,
+        discovery_mode=args.discovery_mode,
+        min_discovery_lifetime_volume_usd=args.min_discovery_lifetime_volume_usd,
+        max_discovery_lifetime_volume_usd=args.max_discovery_lifetime_volume_usd,
+        min_avg_daily_volume_usd=args.min_avg_daily_volume_usd,
+        max_avg_daily_volume_usd=args.max_avg_daily_volume_usd,
     )
-    UniswapAnalyzer(config).run_analysis()
+    UniswapILVolumeAnalyser(cfg).run()
 
 
 if __name__ == "__main__":
