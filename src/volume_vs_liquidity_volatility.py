@@ -38,7 +38,7 @@ from tqdm import tqdm
 # --------------------------------------------------------------------------- #
 SUBGRAPH_IDS = {
     "mainnet": {
-        # "v2": "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
+        "v2": "A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum",
         "v3": "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
     },
     "base": {
