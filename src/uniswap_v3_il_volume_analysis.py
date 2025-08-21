@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+
+# related to how to properly calculate v3 il: https://chatgpt.com/share/68a6f54a-f450-8005-ba50-8e56ea66546f
+
+
 """
 Uniswap V3 — Small-Volume Pools: Daily IL vs Volume
 
@@ -400,7 +405,6 @@ def main():
         file=sys.stderr,
     )
 
-
     try:
         pool_days = fetch_pool_days(
             args.endpoint, start_ts, args.volume_min, args.volume_max
@@ -479,39 +483,56 @@ def main():
         # Remove extreme outliers and zero/negative values for log scale
         q99 = np.percentile(valid_ratios, 99)
         filtered_ratios = valid_ratios[(valid_ratios > 0) & (valid_ratios <= q99)]
-        
+
         if len(filtered_ratios) == 0:
             print("No positive ratios found for visualization")
         else:
             # Create histogram with log bins - equal log width bars
-            log_bins = np.logspace(np.log10(filtered_ratios.min()), np.log10(filtered_ratios.max()), 30)
+            log_bins = np.logspace(
+                np.log10(filtered_ratios.min()), np.log10(filtered_ratios.max()), 30
+            )
             counts, bin_edges = np.histogram(filtered_ratios, bins=log_bins)
-            
+
             # Calculate bin centers and widths in log space
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
             bin_widths = bin_edges[1:] - bin_edges[:-1]
-            
+
             # Create bar chart with proper log-scale widths
-            bars = plt.bar(bin_centers, counts, width=bin_widths, alpha=0.7, edgecolor='black', align='center')
-            
+            bars = plt.bar(
+                bin_centers,
+                counts,
+                width=bin_widths,
+                alpha=0.7,
+                edgecolor="black",
+                align="center",
+            )
+
             # Add labels on top of bars showing the ratio range for each bin
-            for i, (bar, left_edge, right_edge, count) in enumerate(zip(bars, bin_edges[:-1], bin_edges[1:], counts)):
+            for i, (bar, left_edge, right_edge, count) in enumerate(
+                zip(bars, bin_edges[:-1], bin_edges[1:], counts)
+            ):
                 if count > 0:  # Only label bars with data
                     # Format the range nicely
                     if left_edge < 0.001:
                         left_str = f"{left_edge:.1e}"
                     else:
                         left_str = f"{left_edge:.3f}"
-                    
+
                     if right_edge < 0.001:
                         right_str = f"{right_edge:.1e}"
                     else:
                         right_str = f"{right_edge:.3f}"
-                    
+
                     # Place label on top of bar
-                    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(counts)*0.01, 
-                            f"{left_str}-{right_str}", 
-                            ha='center', va='bottom', rotation=45, fontsize=8)
+                    plt.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + max(counts) * 0.01,
+                        f"{left_str}-{right_str}",
+                        ha="center",
+                        va="bottom",
+                        rotation=45,
+                        fontsize=8,
+                    )
         plt.axvline(
             avg_ratio,
             color="red",
@@ -527,14 +548,14 @@ def main():
             label=f"Median: {median_ratio:.6f}",
         )
 
-        plt.xscale('log')
+        plt.xscale("log")
         plt.xlabel("IL/Volume Ratio (log scale)")
         plt.ylabel("Number of Pools")
         plt.title(
             "Distribution of IL/Volume Ratios Across Pools (Log Scale)\n(99th percentile and above excluded for clarity)"
         )
         plt.legend()
-        plt.grid(True, alpha=0.3, which='both')
+        plt.grid(True, alpha=0.3, which="both")
 
         # Save the plot
         plot_filename = args.out.replace(".csv", "_distribution.png")
