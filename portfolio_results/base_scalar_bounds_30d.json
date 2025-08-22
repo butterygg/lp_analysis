@@ -1,0 +1,22 @@
+{
+  "chain": "Base",
+  "current_tvl": 4690795971,
+  "lower_bound": 3767236604.6602874,
+  "upper_bound": 7020658073.130262,
+  "confidence_level": 0.99,
+  "bootstrap_lower": 3775258015.760025,
+  "bootstrap_upper": 7000289287.6397505,
+  "regime_aware_lower": 3789845100.993436,
+  "regime_aware_upper": 7103905526.020527,
+  "log_returns_mean": 0.10060383333364122,
+  "log_returns_std": 0.16030399243318227,
+  "volatility_30day": 0.16133937490860104,
+  "volatility_annual": 0.5627638276696781,
+  "num_periods": 331,
+  "data_days": 757,
+  "used_priors": false,
+  "prior_weight": 0.0,
+  "growth_cap_applied": false,
+  "age_cap_multiplier": 0.0,
+  "analysis_date": "2025-08-22T15:58:03.254869"
+}

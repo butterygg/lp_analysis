@@ -136,7 +136,7 @@ class ScalarBoundsCalculator:
         return np.array(log_returns)
 
     def empirical_quantile_bands(
-        self, log_returns: np.ndarray, confidence_level: float = 0.99
+        self, log_returns: np.ndarray, confidence_level: float = 0.95
     ) -> Tuple[float, float]:
         """
         Calculate bounds using empirical quantiles from historical log-returns.
@@ -165,7 +165,7 @@ class ScalarBoundsCalculator:
     def bootstrap_confidence_bands(
         self,
         log_returns: np.ndarray,
-        confidence_level: float = 0.99,
+        confidence_level: float = 0.95,
         n_bootstrap: int = 1000,
         block_size: int = 5,
     ) -> Tuple[float, float]:
@@ -213,7 +213,7 @@ class ScalarBoundsCalculator:
     def regime_aware_bounds(
         self,
         log_returns: np.ndarray,
-        confidence_level: float = 0.99,
+        confidence_level: float = 0.95,
         vol_threshold_percentile: float = 0.75,
     ) -> Tuple[float, float]:
         """
@@ -319,8 +319,8 @@ class ScalarBoundsCalculator:
                 # Extract statistics
                 priors["log_returns_mean"].append(np.mean(log_returns))
                 priors["log_returns_std"].append(np.std(log_returns))
-                priors["q_low"].append(np.quantile(log_returns, 0.005))
-                priors["q_high"].append(np.quantile(log_returns, 0.995))
+                priors["q_low"].append(np.quantile(log_returns, 0.025))
+                priors["q_high"].append(np.quantile(log_returns, 0.975))
 
             except Exception as e:
                 print(f"Could not get priors from {mature_chain}: {e}")
@@ -380,8 +380,8 @@ class ScalarBoundsCalculator:
                 if len(log_returns) > 0:
                     local_mean = np.mean(log_returns)
                     local_std = np.std(log_returns)
-                    local_q_low = np.quantile(log_returns, 0.005)
-                    local_q_high = np.quantile(log_returns, 0.995)
+                    local_q_low = np.quantile(log_returns, 0.025)
+                    local_q_high = np.quantile(log_returns, 0.975)
 
                     # Weighted average
                     blended_q_low = (
@@ -424,7 +424,7 @@ class ScalarBoundsCalculator:
 
         return lower_bound, upper_bound, adjustments
 
-    def calculate_bounds(self, confidence_level: float = 0.99) -> ScalarBoundsResult:
+    def calculate_bounds(self, confidence_level: float = 0.95) -> ScalarBoundsResult:
         """
         Calculate comprehensive bounds using multiple methods.
         """
@@ -549,6 +549,7 @@ class ScalarBoundsCalculator:
         ax1.set_xlabel("Date")
         ax1.set_ylabel("TVL (USD)")
         ax1.set_title("TVL with Different Bound Methods")
+        ax1.set_yscale("linear")
         ax1.legend(fontsize=8)
         ax1.grid(True, alpha=0.3)
 
@@ -563,16 +564,16 @@ class ScalarBoundsCalculator:
             label=f"Mean: {np.mean(log_returns):.3f}",
         )
         ax2.axvline(
-            np.quantile(log_returns, 0.005),
+            np.quantile(log_returns, 0.025),
             color="orange",
             linestyle="--",
-            label="0.5% quantile",
+            label="2.5% quantile",
         )
         ax2.axvline(
-            np.quantile(log_returns, 0.995),
+            np.quantile(log_returns, 0.975),
             color="orange",
             linestyle="--",
-            label="99.5% quantile",
+            label="97.5% quantile",
         )
         ax2.set_xlabel("30-day Log Return")
         ax2.set_ylabel("Frequency")
@@ -703,16 +704,16 @@ Young Series Adjustments:
         print("=" * 60)
 
 
-def main(chain: str = "Base", period_days: int = 30):
+def main(chain: str = "Base", period_days: int = 30, lookback_months: int = 12):
     """Main execution function."""
 
     # Initialize calculator
     calculator = ScalarBoundsCalculator(
-        chain=chain, lookback_months=12, period_days=period_days
+        chain=chain, lookback_months=lookback_months, period_days=period_days
     )
 
     # Calculate bounds
-    result = calculator.calculate_bounds(confidence_level=0.99)
+    result = calculator.calculate_bounds(confidence_level=0.95)
 
     # Print summary
     calculator.print_summary(result)
@@ -741,4 +742,5 @@ if __name__ == "__main__":
 
     chain = sys.argv[1] if len(sys.argv) > 1 else "Base"
     period_days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-    result = main(chain, period_days)
+    lookback_months = int(sys.argv[3]) if len(sys.argv) > 3 else 12
+    result = main(chain, period_days, lookback_months)

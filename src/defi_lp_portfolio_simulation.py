@@ -27,6 +27,7 @@ from .lp_simulation_utils import (
 )
 
 logger = logging.getLogger(__name__)
+logger.level("DEBUG")
 
 
 # ------------------------------------------------------------------ #
@@ -190,8 +191,14 @@ class SimulationWorkflow:
                 min_up_price=0.01,
                 max_up_price=1.0,
             ),
+            "Hyperliquid L1": dict(
+                min_tvl_ratio=0.75,
+                max_tvl_ratio=1.73,
+                min_up_price=0.01,
+                max_up_price=1.0,
+            ),
         }
-        self.cfg.top_evm_chains = ["Arbitrum", "Base", "Unichain"]
+        self.cfg.top_evm_chains = ["Arbitrum", "Base", "Unichain", "Hyperliquid L1"]
 
         self.repo = ChainTVLRepository(self.cfg)
         self.analyser = MultiChainPortfolio(self.cfg)
