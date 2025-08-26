@@ -103,18 +103,18 @@ Each market contains UP and DOWN tokens representing directional bets on chain T
 
 ## Aggregated Portfolio Performance
 (corresponds to making an initial equal deposit into each pool)
-![Portfolio Return Distributions](lp_returns/return_distributions.png)
+![Portfolio Return Distributions](portfolio_simulation/lp_returns/return_distributions.png)
 
 ## Individual Pool Performance
 
 ### Arbitrum TVL market pool returns
-![Arbitrum Return Distributions](lp_returns/arbitrum_return_distributions.png)
+![Arbitrum Return Distributions](portfolio_simulation/lp_returns/arbitrum_return_distributions.png)
 
 ### Base TVL market pool returns
-![Base Return Distributions](lp_returns/base_return_distributions.png)
+![Base Return Distributions](portfolio_simulation/lp_returns/base_return_distributions.png)
 
 ### Unichain TVL market pool returns
-![Unichain Return Distributions](lp_returns/unichain_return_distributions.png)
+![Unichain Return Distributions](portfolio_simulation/lp_returns/unichain_return_distributions.png)
 
 ## Notes & Observations
 - **Chain diversification matters**: Portfolio approach reduces risk compared to single-chain exposure, with Arbitrum showing the best individual performance
