@@ -74,7 +74,7 @@ class ScalarBoundsCalculator:
         print(f"Fetching TVL history for {self.chain}...")
 
         url = f"https://api.llama.fi/v2/historicalChainTvl/{self.chain}"
-        cache_file = Path("cache") / f"chain_tvl_{self.chain}.json"
+        cache_file = Path("../cache") / f"chain_tvl_{self.chain}.json"
 
         data = cached_api_fetch(url, cache_file)
         if not data:
@@ -303,7 +303,7 @@ class ScalarBoundsCalculator:
 
             try:
                 # Try to load cached data
-                cache_file = Path("cache") / f"chain_tvl_{mature_chain}.json"
+                cache_file = Path("../cache") / f"chain_tvl_{mature_chain}.json"
                 if not cache_file.exists():
                     continue
 
@@ -718,8 +718,8 @@ def main(chain: str = "Base", period_days: int = 30, lookback_months: int = 12):
     # Print summary
     calculator.print_summary(result)
 
-    # Save results
-    results_dir = Path("portfolio_results")
+    # Save results  
+    results_dir = Path(__file__).parent / "results"
     results_dir.mkdir(exist_ok=True)
 
     # Save numerical results

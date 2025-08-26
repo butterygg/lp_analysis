@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from .lp_simulation_utils import (
+from lp_simulation_utils import (
     PortfolioAnalyzer,
     SimulationConfig,
     cached_api_fetch,
@@ -67,7 +67,7 @@ class ChainTVLRepository:
     # -------------------- internals -------------------- #
     def _download_chain_history(self, chain: str) -> Dict[int, float]:
         url = self._LLAMA_ENDPOINT.format(chain=chain)
-        cache_path = Path("cache") / f"chain_{chain}_history.json"
+        cache_path = Path("../cache") / f"chain_{chain}_history.json"
         data = cached_api_fetch(url, cache_path)
         return {int(d["date"]): float(d["tvl"]) for d in data} if data else {}
 
@@ -579,7 +579,7 @@ class SimulationWorkflow:
         chain_stats: Dict[str, Dict],
         chain_raw_returns: Dict[str, Dict[str, List[float]]],
     ) -> Dict:
-        out_dir = Path("portfolio_results")
+        out_dir = Path(__file__).parent / "results"
         out_dir.mkdir(exist_ok=True)
 
         # Create config with exact structure as specified

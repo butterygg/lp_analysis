@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 
 def load_chain_data(chain: str, period: int = 21, recency_months: int = None) -> Dict:
     """Load bounds data for a specific chain."""
-    results_dir = Path("portfolio_results")
+    results_dir = Path("../scalar_bounds_analysis/results")
     
     if recency_months:
         # Load recent bounds data

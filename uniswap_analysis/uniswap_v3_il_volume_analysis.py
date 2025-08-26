@@ -81,6 +81,7 @@ import math
 import os
 import time
 import sys
+from pathlib import Path
 from typing import Any, List, Optional, Dict, Tuple
 
 import requests
@@ -650,7 +651,7 @@ def main():
     ap.add_argument(
         "--out",
         type=str,
-        default="pools_il_volume.csv",
+        default=str(Path(__file__).parent / "pools_il_volume.csv"),
         help="Output CSV filename for per-pool summary",
     )
     args = ap.parse_args()
