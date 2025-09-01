@@ -24,7 +24,10 @@ sns.set_palette("husl")
 class LPReturnVisualizer:
     """Creates intuitive visualizations of LP return distributions."""
 
-    def __init__(self, results_file: str = "../portfolio_simulation/results/simulation_results.json"):
+    def __init__(
+        self,
+        results_file: str = "../portfolio_simulation/results/simulation_results.json",
+    ):
         self.results_file = Path(results_file)
         self.data = self._load_results()
         self.raw_data = self.data["raw_returns"]

@@ -66,4 +66,4 @@ Creates professional visualizations of LP return distributions and analysis resu
 
 ## Original Research
 
-The detailed methodology and findings from the original research are preserved in [REPORT.md](REPORT.md).
+The detailed methodology and findings from the original research are preserved in [REPORT.md](.old/REPORT.md).
