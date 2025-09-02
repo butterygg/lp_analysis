@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Description:** Hyperliquid L1 TVL from https://api.llama.fi/v2/historicalChainTvl/ using chain 'Hyperliquid L1', taking the last TVL value within each 30-day window
+**Profile Question:** Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/Hyperliquid%20L1 and answer with the Hyperliquid L1 chain total TVL in USD on {MARKET_END_DATE_UTC}.
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:

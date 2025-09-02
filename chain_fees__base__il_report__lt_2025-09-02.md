@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Description:** Base tx-fee revenue (dailyRevenue) from https://api.llama.fi/summary/fees/base?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue, summed over each 30-day window
+**Profile Question:** Use the DefiLlama fees API at https://api.llama.fi/summary/fees/base?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue and answer with the cumulative Base chain revenue in USD from {MARKET_START_DATE_UTC} to {MARKET_END_DATE_UTC} (inclusive).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:

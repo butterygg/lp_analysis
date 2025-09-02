@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Description:** Solana TVL from https://api.llama.fi/v2/historicalChainTvl/ using chain 'Solana', taking the last TVL value within each 30-day window
+**Profile Question:** Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/Solana and answer with the Solana chain total TVL in USD on {MARKET_END_DATE_UTC}.
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:

@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Description:** USDT Aave V3 Ethereum supply APY from https://yields.llama.fi/chart/ using pool f981a304-bb6c-45b8-b0c5-fd2f515ad23a, computed as 30-day moving average excluding rewards
+**Profile Question:** Use the DefiLlama yields API at https://yields.llama.fi/chart/f981a304-bb6c-45b8-b0c5-fd2f515ad23a and answer with the USDT Aave V3 Ethereum supply APY (excluding rewards) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
