@@ -20,17 +20,23 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -6.01% and **median** -1.64% IL-only returns are shown below.
+- **Mean** -23.13% and **median** -6.46% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
+### IL Distribution Histogram
 ![Portfolio Return Distributions](aave_yield__usdc__il_hist__lt_2025-09-02.png)
+
+### IL Over Time
+![IL Returns Over Time](aave_yield__usdc__il_timeseries__lt_2025-09-02.png)
+
+This time series shows how IL-only portfolio returns have varied across different historical windows.
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **246**
-- Mean: **-6.01%**, Std: **14.65%**
-- Median: **-1.64%**  |  P25: **-8.23%**  |  P10: **-12.34%**  |  P75: **-0.25%**
+- Count: **429**
+- Mean: **-23.13%**, Std: **32.23%**
+- Median: **-6.46%**  |  P25: **-25.16%**  |  P10: **-84.24%**  |  P75: **-0.79%**
 
 ## Calculating Your Net APY
 
@@ -51,13 +57,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.64%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.46%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -1.6%) = 1.164 × 0.984 = 1.145
-4. **Net return for 30 days**: 14.5%
-5. **Annualized (APY)**: (1.145)^12.2 - 1 = **420.7% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -6.5%) = 1.164 × 0.935 = 1.089
+4. **Net return for 30 days**: 8.9%
+5. **Annualized (APY)**: (1.089)^12.2 - 1 = **182.7% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
