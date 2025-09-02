@@ -2,6 +2,9 @@
 
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
+## Data Source
+**Profile Description:** Base TVL from https://api.llama.fi/v2/historicalChainTvl/ using chain 'Base', taking the last TVL value within each 30-day window
+
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
 - **UP tokens** increase in value when the metric rises above its starting level
@@ -20,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -10.39% and **median** -6.02% IL-only returns are shown below.
+- **Mean** -4.23% and **median** -1.77% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -34,9 +37,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **245**
-- Mean: **-10.39%**, Std: **11.36%**
-- Median: **-6.02%**  |  P25: **-16.71%**  |  P10: **-28.27%**  |  P75: **-1.25%**
+- Count: **399**
+- Mean: **-4.23%**, Std: **5.12%**
+- Median: **-1.77%**  |  P25: **-7.07%**  |  P10: **-11.67%**  |  P75: **-0.33%**
 
 ## Calculating Your Net APY
 
@@ -57,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.02%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.77%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -6.0%) = 1.164 × 0.940 = 1.094
-4. **Net return for 30 days**: 9.4%
-5. **Annualized (APY)**: (1.094)^12.2 - 1 = **199.3% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -1.8%) = 1.164 × 0.982 = 1.144
+4. **Net return for 30 days**: 14.4%
+5. **Annualized (APY)**: (1.144)^12.2 - 1 = **412.4% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
@@ -78,15 +81,6 @@ Where:
 
 ## Outputs
 - **CSV (per-window IL)**: [chain_tvl__base__il_by_window__lt_2025-09-02.csv](chain_tvl__base__il_by_window__lt_2025-09-02.csv)
-
-## Configuration Parameters
-
-```
-generation.hist_months: 20
-processing.scale: log
-processing.only_positive: True
-processing.min_il_calc_history_months: 5
-```
 
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.

@@ -2,6 +2,9 @@
 
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
+## Data Source
+**Profile Description:** USDT Aave V3 Ethereum supply APY from https://yields.llama.fi/chart/ using pool f981a304-bb6c-45b8-b0c5-fd2f515ad23a, computed as 30-day TWAP excluding rewards
+
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
 - **UP tokens** increase in value when the metric rises above its starting level
@@ -20,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -19.02% and **median** -6.39% IL-only returns are shown below.
+- **Mean** -14.37% and **median** -4.88% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -35,8 +38,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **429**
-- Mean: **-19.02%**, Std: **30.02%**
-- Median: **-6.39%**  |  P25: **-16.86%**  |  P10: **-82.77%**  |  P75: **-2.22%**
+- Mean: **-14.37%**, Std: **25.71%**
+- Median: **-4.88%**  |  P25: **-12.14%**  |  P10: **-41.79%**  |  P75: **-1.80%**
 
 ## Calculating Your Net APY
 
@@ -57,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.39%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-4.88%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -6.4%) = 1.164 × 0.936 = 1.090
-4. **Net return for 30 days**: 9.0%
-5. **Annualized (APY)**: (1.090)^12.2 - 1 = **185.2% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -4.9%) = 1.164 × 0.951 = 1.108
+4. **Net return for 30 days**: 10.8%
+5. **Annualized (APY)**: (1.108)^12.2 - 1 = **246.4% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
@@ -78,18 +81,6 @@ Where:
 
 ## Outputs
 - **CSV (per-window IL)**: [aave_yield__usdt__il_by_window__lt_2025-09-02.csv](aave_yield__usdt__il_by_window__lt_2025-09-02.csv)
-
-## Configuration Parameters
-
-```
-generation.asset_symbol: USDT
-generation.hist_months: 20
-generation.include_rewards: False
-generation.max_effective_interval_seconds: 90000
-processing.scale: max
-processing.only_positive: True
-processing.min_il_calc_history_months: 4
-```
 
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.
