@@ -79,5 +79,14 @@ Where:
 ## Outputs
 - **CSV (per-window IL)**: [chain_tvl__base__il_by_window__lt_2025-09-02.csv](chain_tvl__base__il_by_window__lt_2025-09-02.csv)
 
+## Configuration Parameters
+
+```
+generation.hist_months: 20
+processing.scale: log
+processing.only_positive: True
+processing.min_il_calc_history_months: 5
+```
+
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.
