@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the DefiLlama yields API at https://yields.llama.fi/chart/aa70268e-4b52-42bf-a116-608b370f9501 and answer with the USDC Aave V3 Ethereum supply APY (excluding rewards) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
+**Profile Question:** Use the DefiLlama yields API at https://yields.llama.fi/chart/aa70268e-4b52-42bf-a116-608b370f9501 and answer with the USDC Aave V3 Ethereum supply APY (in bps, i.e. 1%=100bps) (excluding rewards) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
@@ -23,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -18.53% and **median** -5.69% IL-only returns are shown below.
+- **Mean** -18.33% and **median** -5.65% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -38,8 +38,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **429**
-- Mean: **-18.53%**, Std: **27.86%**
-- Median: **-5.69%**  |  P25: **-20.99%**  |  P10: **-54.72%**  |  P75: **-0.70%**
+- Mean: **-18.33%**, Std: **26.70%**
+- Median: **-5.65%**  |  P25: **-23.42%**  |  P10: **-54.75%**  |  P75: **-0.70%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-5.69%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-5.65%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -5.7%) = 1.164 × 0.943 = 1.098
-4. **Net return for 30 days**: 9.8%
-5. **Annualized (APY)**: (1.098)^12.2 - 1 = **212.2% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -5.6%) = 1.164 × 0.944 = 1.099
+4. **Net return for 30 days**: 9.9%
+5. **Annualized (APY)**: (1.099)^12.2 - 1 = **214.1% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
