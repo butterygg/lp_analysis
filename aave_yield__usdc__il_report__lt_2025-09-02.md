@@ -20,7 +20,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -6.52% and **median** -2.19% IL-only returns are shown below.
+- **Mean** -6.01% and **median** -1.64% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -28,17 +28,9 @@ We **exclude** very early windows until a minimum history (processing.min_il_cal
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **239**
-- Mean: **-6.52%**, Std: **8.15%**
-- Median: **-2.19%**  |  P25: **-11.50%**  |  P10: **-19.99%**  |  P75: **-0.35%**
-
-### Outlier Removal
-
-- **Original data points**: 276
-- **Outliers removed**: 37
-- **Final data points**: 239
-- **Outlier bounds**: -45.35% to 26.47%
-- **IQR multiplier**: 1.5
+- Count: **246**
+- Mean: **-6.01%**, Std: **14.65%**
+- Median: **-1.64%**  |  P25: **-8.23%**  |  P10: **-12.34%**  |  P75: **-0.25%**
 
 ## Calculating Your Net APY
 
@@ -59,16 +51,17 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.19%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.64%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -2.2%) = 1.164 × 0.978 = 1.139
-4. **Net return for 30 days**: 13.9%
-5. **Annualized (APY)**: (1.139)^12.2 - 1 = **386.7% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -1.6%) = 1.164 × 0.984 = 1.145
+4. **Net return for 30 days**: 14.5%
+5. **Annualized (APY)**: (1.145)^12.2 - 1 = **420.7% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
+   - **Note**: Merkl APY can vary over the duration of the market depending on the amount of liquidity provided
 2. Multiply that APY by **0.082**
 3. Add 1 to get the incentive multiplier
 4. Multiply by (1 + your_expected_IL_return)

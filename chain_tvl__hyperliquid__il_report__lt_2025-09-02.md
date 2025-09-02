@@ -1,4 +1,4 @@
-# LP IL-Only Report — `aave_yield` / `usdt`
+# LP IL-Only Report — `chain_tvl` / `hyperliquid`
 
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
@@ -20,17 +20,17 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -4.80% and **median** -1.08% IL-only returns are shown below.
+- **Mean** -10.03% and **median** -0.27% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
-![Portfolio Return Distributions](aave_yield__usdt__il_hist__lt_2025-09-02.png)
+![Portfolio Return Distributions](chain_tvl__hyperliquid__il_hist__lt_2025-09-02.png)
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **61**
-- Mean: **-4.80%**, Std: **8.45%**
-- Median: **-1.08%**  |  P25: **-2.00%**  |  P10: **-20.57%**  |  P75: **-0.42%**
+- Count: **245**
+- Mean: **-10.03%**, Std: **28.62%**
+- Median: **-0.27%**  |  P25: **-1.48%**  |  P10: **-18.92%**  |  P75: **-0.09%**
 
 ## Calculating Your Net APY
 
@@ -51,13 +51,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.08%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-0.27%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -1.1%) = 1.164 × 0.989 = 1.152
-4. **Net return for 30 days**: 15.2%
-5. **Annualized (APY)**: (1.152)^12.2 - 1 = **458.0% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -0.3%) = 1.164 × 0.997 = 1.161
+4. **Net return for 30 days**: 16.1%
+5. **Annualized (APY)**: (1.161)^12.2 - 1 = **516.7% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
@@ -71,7 +71,7 @@ Where:
 # Technical Implementation
 
 ## Outputs
-- **CSV (per-window IL)**: [aave_yield__usdt__il_by_window__lt_2025-09-02.csv](aave_yield__usdt__il_by_window__lt_2025-09-02.csv)
+- **CSV (per-window IL)**: [chain_tvl__hyperliquid__il_by_window__lt_2025-09-02.csv](chain_tvl__hyperliquid__il_by_window__lt_2025-09-02.csv)
 
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.
