@@ -20,7 +20,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -10.77% and **median** -3.26% IL-only returns are shown below.
+- **Mean** -19.02% and **median** -6.39% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -35,8 +35,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **429**
-- Mean: **-10.77%**, Std: **23.49%**
-- Median: **-3.26%**  |  P25: **-6.87%**  |  P10: **-20.38%**  |  P75: **-1.18%**
+- Mean: **-19.02%**, Std: **30.02%**
+- Median: **-6.39%**  |  P25: **-16.86%**  |  P10: **-82.77%**  |  P75: **-2.22%**
 
 ## Calculating Your Net APY
 
@@ -57,13 +57,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-3.26%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.39%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -3.3%) = 1.164 × 0.967 = 1.126
-4. **Net return for 30 days**: 12.6%
-5. **Annualized (APY)**: (1.126)^12.2 - 1 = **325.9% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -6.4%) = 1.164 × 0.936 = 1.090
+4. **Net return for 30 days**: 9.0%
+5. **Annualized (APY)**: (1.090)^12.2 - 1 = **185.2% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
@@ -78,6 +78,18 @@ Where:
 
 ## Outputs
 - **CSV (per-window IL)**: [aave_yield__usdt__il_by_window__lt_2025-09-02.csv](aave_yield__usdt__il_by_window__lt_2025-09-02.csv)
+
+## Configuration Parameters
+
+```
+generation.asset_symbol: USDT
+generation.hist_months: 20
+generation.include_rewards: False
+generation.max_effective_interval_seconds: 90000
+processing.scale: max
+processing.only_positive: True
+processing.min_il_calc_history_months: 4
+```
 
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.
