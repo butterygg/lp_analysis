@@ -23,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -3.31% and **median** -2.88% IL-only returns are shown below.
+- **Mean** -2.73% and **median** -2.41% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -38,8 +38,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **63**
-- Mean: **-3.31%**, Std: **2.05%**
-- Median: **-2.88%**  |  P25: **-4.10%**  |  P10: **-6.17%**  |  P75: **-1.98%**
+- Mean: **-2.73%**, Std: **1.67%**
+- Median: **-2.41%**  |  P25: **-3.45%**  |  P10: **-4.73%**  |  P75: **-1.48%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.88%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.41%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
 2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -2.9%) = 1.164 × 0.971 = 1.131
-4. **Net return for 30 days**: 13.1%
-5. **Annualized (APY)**: (1.131)^12.2 - 1 = **346.2% APY**
+3. **Apply median IL loss**: 1.164 × (1 + -2.4%) = 1.164 × 0.976 = 1.136
+4. **Net return for 30 days**: 13.6%
+5. **Annualized (APY)**: (1.136)^12.2 - 1 = **373.4% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
