@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the beaconcha.in ETH.STORE API at https://beaconcha.in/api/v1/ethstore/{day} and answer with the ETH.STORE APR (in bps, i.e. 1%=100bps) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
+**Profile Question:** Use the beaconcha.in ETH.STORE API at https://beaconcha.in/api/v1/ethstore/{day} and answer with the ETH.STORE rate (in bps, i.e. 1%=100bps) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
