@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the beaconcha.in ETH.STORE API at https://beaconcha.in/api/v1/ethstore/{day} and answer with the ETH.STORE rate (in bps, i.e. 1%=100bps) as a {PERIOD_DAYS}-day moving average ending on {MARKET_END_DATE_UTC} (inclusive).
+**Profile Question:** Use the beaconcha.in ETH.STORE API at https://beaconcha.in/api/v1/ethstore/{day}. Return the ETH.STORE rate in basis points as the simple arithmetic average of the daily ETH.STORE observations with timestamps t satisfying {MARKET_START_DATE_UTC} < t ≤ {MARKET_END_DATE_UTC} (UTC).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
@@ -19,11 +19,11 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - **Pricing updates**: Prices evolve as the underlying metric changes; UP and DOWN continue to sum to $1.00
 
 # LP Return Distribution
-We simulate starting at each historical window strictly earlier than the cutoff date. The **start price** for each window is built from the mean of the last **5** metric observations available up to **exactly one period** (**30 days**) **before** that window's last date. The **end price** is mapped from the window's own metric.
+We simulate starting at each historical window strictly earlier than the cutoff date. The **start price** for each window is built from the mean of the last **5** metric observations available up to **exactly one period** (**23 days**) **before** that window's last date. The **end price** is mapped from the window's own metric.
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -8.74% and **median** -2.52% IL-only returns are shown below.
+- **Mean** -9.81% and **median** -2.02% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -37,15 +37,15 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **428**
-- Mean: **-8.74%**, Std: **18.52%**
-- Median: **-2.52%**  |  P25: **-7.92%**  |  P10: **-20.55%**  |  P75: **-0.45%**
+- Count: **435**
+- Mean: **-9.81%**, Std: **20.33%**
+- Median: **-2.02%**  |  P25: **-7.66%**  |  P10: **-25.70%**  |  P75: **-0.62%**
 
 ## Calculating Your Net APY
 
 To determine your actual returns, combine Merkl incentive APY with these IL losses:
 
-**Period Factor**: 0.082 (since this is a 30-day market)
+**Period Factor**: 0.063 (since this is a 23-day market)
 
 ### Formula:
 ```
@@ -60,22 +60,22 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.52%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.02%)**:
 
-1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
-2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -2.5%) = 1.164 × 0.975 = 1.135
-4. **Net return for 30 days**: 13.5%
-5. **Annualized (APY)**: (1.135)^12.2 - 1 = **366.8% APY**
+1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
+2. **Convert to multiplier**: 1 + 12.6% = 1.126
+3. **Apply median IL loss**: 1.126 × (1 + -2.0%) = 1.126 × 0.980 = 1.103
+4. **Net return for 23 days**: 10.3%
+5. **Annualized (APY)**: (1.103)^15.9 - 1 = **375.8% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
    - **Note**: Merkl APY can vary over the duration of the market depending on the amount of liquidity provided
-2. Multiply that APY by **0.082**
+2. Multiply that APY by **0.063**
 3. Add 1 to get the incentive multiplier
 4. Multiply by (1 + your_expected_IL_return)
-5. Subtract 1 to get your net return over 30 days
-6. To annualize: raise (1 + return) to the power of 12.2, then subtract 1
+5. Subtract 1 to get your net return over 23 days
+6. To annualize: raise (1 + return) to the power of 15.9, then subtract 1
 
 # Technical Implementation
 

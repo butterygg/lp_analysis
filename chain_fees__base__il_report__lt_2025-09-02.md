@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the DefiLlama fees API at https://api.llama.fi/summary/fees/base?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue and answer with the cumulative Base chain revenue in USD from {MARKET_START_DATE_UTC} to {MARKET_END_DATE_UTC} (inclusive).
+**Profile Question:** Use the DefiLlama fees API at https://api.llama.fi/summary/fees/base?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue.Return the average daily Base chain revenue in USD by computing the arithmetic mean of the per-day revenue values across all records with timestamps t satisfying{MARKET_START_DATE_UTC} < t ≤ {MARKET_END_DATE_UTC} (UTC).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
@@ -19,11 +19,11 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - **Pricing updates**: Prices evolve as the underlying metric changes; UP and DOWN continue to sum to $1.00
 
 # LP Return Distribution
-We simulate starting at each historical window strictly earlier than the cutoff date. The **start price** for each window is built from the mean of the last **5** metric observations available up to **exactly one period** (**30 days**) **before** that window's last date. The **end price** is mapped from the window's own metric.
+We simulate starting at each historical window strictly earlier than the cutoff date. The **start price** for each window is built from the mean of the last **5** metric observations available up to **exactly one period** (**23 days**) **before** that window's last date. The **end price** is mapped from the window's own metric.
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -2.28% and **median** -1.26% IL-only returns are shown below.
+- **Mean** -3.41% and **median** -1.63% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -37,15 +37,15 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **399**
-- Mean: **-2.28%**, Std: **2.54%**
-- Median: **-1.26%**  |  P25: **-3.37%**  |  P10: **-5.92%**  |  P75: **-0.21%**
+- Count: **405**
+- Mean: **-3.41%**, Std: **4.58%**
+- Median: **-1.63%**  |  P25: **-4.56%**  |  P10: **-9.18%**  |  P75: **-0.32%**
 
 ## Calculating Your Net APY
 
 To determine your actual returns, combine Merkl incentive APY with these IL losses:
 
-**Period Factor**: 0.082 (since this is a 30-day market)
+**Period Factor**: 0.063 (since this is a 23-day market)
 
 ### Formula:
 ```
@@ -60,22 +60,22 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.26%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.63%)**:
 
-1. **Scale Merkl APY to period**: 200% × 0.082 = 16.4%
-2. **Convert to multiplier**: 1 + 16.4% = 1.164
-3. **Apply median IL loss**: 1.164 × (1 + -1.3%) = 1.164 × 0.987 = 1.150
-4. **Net return for 30 days**: 15.0%
-5. **Annualized (APY)**: (1.150)^12.2 - 1 = **446.0% APY**
+1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
+2. **Convert to multiplier**: 1 + 12.6% = 1.126
+3. **Apply median IL loss**: 1.126 × (1 + -1.6%) = 1.126 × 0.984 = 1.108
+4. **Net return for 23 days**: 10.8%
+5. **Annualized (APY)**: (1.108)^15.9 - 1 = **407.2% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
    - **Note**: Merkl APY can vary over the duration of the market depending on the amount of liquidity provided
-2. Multiply that APY by **0.082**
+2. Multiply that APY by **0.063**
 3. Add 1 to get the incentive multiplier
 4. Multiply by (1 + your_expected_IL_return)
-5. Subtract 1 to get your net return over 30 days
-6. To annualize: raise (1 + return) to the power of 12.2, then subtract 1
+5. Subtract 1 to get your net return over 23 days
+6. To annualize: raise (1 + return) to the power of 15.9, then subtract 1
 
 # Technical Implementation
 

@@ -1,9 +1,9 @@
-# LP IL-Only Report — `chain_tvl` / `hyperliquid`
+# LP IL-Only Report — `hyperliquid_funding` / `eth_usd`
 
 _Windows strictly earlier than **2025-09-02**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/Hyperliquid%20L1. Return the Hyperliquid L1 chain total TVL in USD from the record with the greatest timestamp at or before {MARKET_END_DATE_UTC} (UTC).
+**Profile Question:** Use Hyperliquid info fundingHistory at https://api.hyperliquid.xyz/info (type=fundingHistory, coin=ETH). For each UTC day compute daily_APY_percent = (sum of that day's funding rates as fractions) * 365 * 100. Return the arithmetic mean of these daily_APY_percent values for records with {MARKET_START_DATE_UTC} < t ≤ {MARKET_END_DATE_UTC}, in basis points.
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
@@ -23,23 +23,23 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -3.00% and **median** -2.20% IL-only returns are shown below.
+- **Mean** -13.04% and **median** -4.59% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
 ### IL Distribution Histogram
-![Portfolio Return Distributions](chain_tvl__hyperliquid__il_hist__lt_2025-09-02.png)
+![Portfolio Return Distributions](hyperliquid_funding__eth_usd__il_hist__lt_2025-09-02.png)
 
 ### IL Over Time
-![IL Returns Over Time](chain_tvl__hyperliquid__il_timeseries__lt_2025-09-02.png)
+![IL Returns Over Time](hyperliquid_funding__eth_usd__il_timeseries__lt_2025-09-02.png)
 
 This time series shows how IL-only portfolio returns have varied across different historical windows.
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **70**
-- Mean: **-3.00%**, Std: **2.77%**
-- Median: **-2.20%**  |  P25: **-3.54%**  |  P10: **-5.91%**  |  P75: **-1.36%**
+- Count: **405**
+- Mean: **-13.04%**, Std: **22.59%**
+- Median: **-4.59%**  |  P25: **-10.18%**  |  P10: **-40.23%**  |  P75: **-1.79%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.20%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-4.59%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
 2. **Convert to multiplier**: 1 + 12.6% = 1.126
-3. **Apply median IL loss**: 1.126 × (1 + -2.2%) = 1.126 × 0.978 = 1.101
-4. **Net return for 23 days**: 10.1%
-5. **Annualized (APY)**: (1.101)^15.9 - 1 = **362.2% APY**
+3. **Apply median IL loss**: 1.126 × (1 + -4.6%) = 1.126 × 0.954 = 1.074
+4. **Net return for 23 days**: 7.4%
+5. **Annualized (APY)**: (1.074)^15.9 - 1 = **211.9% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
@@ -80,7 +80,7 @@ Where:
 # Technical Implementation
 
 ## Outputs
-- **CSV (per-window IL)**: [chain_tvl__hyperliquid__il_by_window__lt_2025-09-02.csv](chain_tvl__hyperliquid__il_by_window__lt_2025-09-02.csv)
+- **CSV (per-window IL)**: [hyperliquid_funding__eth_usd__il_by_window__lt_2025-09-02.csv](hyperliquid_funding__eth_usd__il_by_window__lt_2025-09-02.csv)
 
 # Disclaimer
 This analysis is for informational purposes only and does not constitute financial advice. Results are based on historical data and may not reflect future performance. Simulation code and models may contain errors or inaccuracies.

@@ -3,7 +3,7 @@
 _Windows strictly earlier than **2025-09-03**. All figures exclude trading fees._
 
 ## Data Source
-**Profile Question:** Use the DefiLlama fees API at https://api.llama.fi/summary/fees/bsc?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue. Return the cumulative BSC chain revenue in USD by summing all records with timestamps t satisfying {MARKET_START_DATE_UTC} < t ≤ {MARKET_END_DATE_UTC} (UTC).
+**Profile Question:** Use the DefiLlama fees API at https://api.llama.fi/summary/fees/bsc?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue.Return the average daily BSC chain revenue in USD by computing the arithmetic mean of the per-day revenue values across all records with timestamps t satisfying{MARKET_START_DATE_UTC} < t ≤ {MARKET_END_DATE_UTC} (UTC).
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
