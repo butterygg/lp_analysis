@@ -23,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -15.22% and **median** -8.14% IL-only returns are shown below.
+- **Mean** -14.88% and **median** -7.10% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -37,9 +37,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **353**
-- Mean: **-15.22%**, Std: **19.47%**
-- Median: **-8.14%**  |  P25: **-23.19%**  |  P10: **-42.99%**  |  P75: **-2.16%**
+- Count: **323**
+- Mean: **-14.88%**, Std: **17.91%**
+- Median: **-7.10%**  |  P25: **-23.51%**  |  P10: **-27.57%**  |  P75: **-2.14%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-8.14%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-7.10%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
 2. **Convert to multiplier**: 1 + 12.6% = 1.126
-3. **Apply median IL loss**: 1.126 × (1 + -8.1%) = 1.126 × 0.919 = 1.034
-4. **Net return for 23 days**: 3.4%
-5. **Annualized (APY)**: (1.034)^15.9 - 1 = **70.9% APY**
+3. **Apply median IL loss**: 1.126 × (1 + -7.1%) = 1.126 × 0.929 = 1.046
+4. **Net return for 23 days**: 4.6%
+5. **Annualized (APY)**: (1.046)^15.9 - 1 = **104.4% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
