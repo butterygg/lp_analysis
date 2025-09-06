@@ -19,11 +19,11 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - **Pricing updates**: Prices evolve as the underlying metric changes; UP and DOWN continue to sum to $1.00
 
 # LP Return Distribution
-We simulate starting at each historical window strictly earlier than the cutoff date. The **start price** for each window is built from the mean of the last **5** metric observations available up to **exactly one period** (**23 days**) **before** that window's last date. The **end price** is mapped from the window's own metric.
-We **exclude** very early windows until a minimum history (processing.min_il_calc_history_months) has elapsed to avoid unstable bounds.
+We simulate starting at each historical window strictly earlier than the cutoff date. 
+We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -7.81% and **median** -2.91% IL-only returns are shown below.
+- **Mean** -18.64% and **median** -13.11% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -37,9 +37,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **406**
-- Mean: **-7.81%**, Std: **11.39%**
-- Median: **-2.91%**  |  P25: **-10.54%**  |  P10: **-22.87%**  |  P75: **-0.84%**
+- Count: **318**
+- Mean: **-18.64%**, Std: **16.41%**
+- Median: **-13.11%**  |  P25: **-30.00%**  |  P10: **-42.80%**  |  P75: **-5.54%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-2.91%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-13.11%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
 2. **Convert to multiplier**: 1 + 12.6% = 1.126
-3. **Apply median IL loss**: 1.126 × (1 + -2.9%) = 1.126 × 0.971 = 1.093
-4. **Net return for 23 days**: 9.3%
-5. **Annualized (APY)**: (1.093)^15.9 - 1 = **311.4% APY**
+3. **Apply median IL loss**: 1.126 × (1 + -13.1%) = 1.126 × 0.869 = 0.978
+4. **Net return for 23 days**: -2.2%
+5. **Annualized (APY)**: (0.978)^15.9 - 1 = **-29.3% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
