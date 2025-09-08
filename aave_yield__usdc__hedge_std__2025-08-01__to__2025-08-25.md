@@ -1,0 +1,48 @@
+# Hedging StdDev Report
+
+**KPI:** aave_yield  
+**Profile:** usdc  
+**Window (UTC):** 2025-08-01T00:00:00+00:00 → 2025-08-25T00:00:00+00:00  
+
+## Inputs
+- Exposure to metric: `36,436.08`
+- Fraction of portfolio exposed: `1.00`
+- Metric % Std over period: `51.60%` (std=`210.06`, median level=`407.12`)
+
+## Diagnostics
+- S->R pairs used: `387`  (from `2024-07-22` to `2025-08-12`)
+
+## Raw Output (for programmatic use)
+```json
+{
+  "kpi": "aave_yield",
+  "profile": "usdc",
+  "exposure_to_metric": 36436.08,
+  "delta_abs_percentiles": {
+    "p50": 76.87,
+    "p80": 237.79,
+    "p90": 329.21
+  },
+  "hedging_std_component": {
+    "p50": 2800812.76,
+    "p80": 8664201.4,
+    "p90": 11995153.38
+  },
+  "debug": {
+    "pair_count": 387,
+    "first_S_date": "2024-07-22",
+    "last_S_date": "2025-08-12",
+    "metric_change_std": 210.06,
+    "metric_level_median": 407.12
+  },
+  "report": {
+    "path": "/home/pimania/dev/butter/lp_analysis/aave_yield__usdc__hedge_std__2025-08-01__to__2025-08-25.md",
+    "url": "https://github.com/butterygg/lp_analysis/blob/master/aave_yield__usdc__hedge_std__2025-08-01__to__2025-08-25.md"
+  },
+  "window": {
+    "start": "2025-08-01T00:00:00+00:00",
+    "end": "2025-08-25T00:00:00+00:00",
+    "period_days": 24
+  }
+}
+```
