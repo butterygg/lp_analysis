@@ -11,13 +11,11 @@
 | StdDev of hedging P&L (p80) | $5,053,220 |
 | StdDev of hedging P&L (p90) | $7,643,668 |
 
-### Metric Variance (percentiles)
+### Metric % Std (period)
 
-| Percentile | Variance (%) |
-|---:|---:|
-| p50 | 55.89% |
-| p80 | 126.71% |
-| p90 | 191.67% |
+| Metric | Value (%) |
+|---|---:|
+| Std/Median (over window) | 109.17% |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `347` (from `2024-09-02` to `2025-08-14`)
@@ -35,11 +33,7 @@
     "p80": 219705.2,
     "p90": 332333.4
   },
-  "metric_percentile_variance_pct": {
-    "p50": 55.89,
-    "p80": 126.71,
-    "p90": 191.67
-  },
+  "metric_percent_std_pct": 109.17,
   "hedging_std_component": {
     "p50": 2229068.0,
     "p80": 5053219.6,
