@@ -7,9 +7,18 @@
 | Metric | Value |
 |---|---:|
 | Exposure to metric (window) | $41,796,699.85 |
+| Average total exposure (metric × exposure/unit) | $600,110,308.34 |
 | StdDev of hedging P&L (p50) | $253,496,985 |
 | StdDev of hedging P&L (p80) | $706,364,227 |
 | StdDev of hedging P&L (p90) | $863,645,209 |
+
+### Metric Variance (percentiles)
+
+| Percentile | Variance (%) |
+|---:|---:|
+| p50 | 64.11% |
+| p80 | 178.65% |
+| p90 | 218.42% |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `324` (from `2024-09-21` to `2025-08-10`)
@@ -21,10 +30,16 @@
   "kpi": "stable_deviation",
   "profile": "usdt",
   "exposure_to_metric": 41796699.85,
+  "average_total_exposure": 600110308.34,
   "delta_abs_percentiles": {
     "p50": 6.07,
     "p80": 16.9,
     "p90": 20.66
+  },
+  "metric_percentile_variance_pct": {
+    "p50": 64.11,
+    "p80": 178.65,
+    "p90": 218.42
   },
   "hedging_std_component": {
     "p50": 253496984.59,
@@ -36,7 +51,8 @@
     "first_S_date": "2024-09-21",
     "last_S_date": "2025-08-10",
     "metric_change_std": 11.97,
-    "metric_level_median": 9.46
+    "metric_level_median": 9.46,
+    "metric_level_mean": 14.36
   },
   "report": {
     "path": "/home/pimania/dev/butter/lp_analysis/stable_deviation__usdt__hedge_std__2025-08-01__to__2025-08-25.md",

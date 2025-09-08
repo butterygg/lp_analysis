@@ -6,10 +6,19 @@
 
 | Metric | Value |
 |---|---:|
-| Exposure to metric (window) | $19,121.78 |
-| StdDev of hedging P&L (p50) | $17,032,537 |
-| StdDev of hedging P&L (p80) | $41,324,189 |
-| StdDev of hedging P&L (p90) | $58,185,131 |
+| Exposure to metric (window) | $19,199.67 |
+| Average total exposure (metric × exposure/unit) | $25,034,775.00 |
+| StdDev of hedging P&L (p50) | $17,101,919 |
+| StdDev of hedging P&L (p80) | $41,492,523 |
+| StdDev of hedging P&L (p90) | $58,422,148 |
+
+### Metric Variance (percentiles)
+
+| Percentile | Variance (%) |
+|---:|---:|
+| p50 | 81.62% |
+| p80 | 198.01% |
+| p90 | 278.81% |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `439` (from `2024-06-01` to `2025-08-13`)
@@ -20,23 +29,30 @@
 {
   "kpi": "hyperliquid_funding",
   "profile": "eth_usd",
-  "exposure_to_metric": 19121.78,
+  "exposure_to_metric": 19199.67,
+  "average_total_exposure": 25034775.0,
   "delta_abs_percentiles": {
     "p50": 890.74,
     "p80": 2161.11,
     "p90": 3042.87
   },
+  "metric_percentile_variance_pct": {
+    "p50": 81.62,
+    "p80": 198.01,
+    "p90": 278.81
+  },
   "hedging_std_component": {
-    "p50": 17032537.09,
-    "p80": 41324188.92,
-    "p90": 58185130.66
+    "p50": 17101919.16,
+    "p80": 41492523.06,
+    "p90": 58422147.87
   },
   "debug": {
     "pair_count": 439,
     "first_S_date": "2024-06-01",
     "last_S_date": "2025-08-13",
     "metric_change_std": 1869.59,
-    "metric_level_median": 1091.39
+    "metric_level_median": 1091.39,
+    "metric_level_mean": 1303.92
   },
   "report": {
     "path": "/home/pimania/dev/butter/lp_analysis/hyperliquid_funding__eth_usd__hedge_std__2025-08-01__to__2025-08-25.md",
