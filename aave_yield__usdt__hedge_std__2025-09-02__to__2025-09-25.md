@@ -7,15 +7,14 @@
 | Metric | Value |
 |---|---:|
 | Average total exposure (metric × exposure/unit) | $20,161,878.34 |
-| StdDev of hedging P&L (p50) | $3,266,259 |
-| StdDev of hedging P&L (p80) | $7,240,713 |
-| StdDev of hedging P&L (p90) | $10,165,672 |
 
-### Metric % Std (period)
+### Standard Deviations by Percentile (period)
 
-| Metric | Value (%) |
-|---|---:|
-| Std/Median (over window) | 39.61% |
+| Metric | p50 | p80 | p90 |
+|---|---:|---:|---:|
+| StdDev of hedging P&L | $3,266,259 | $7,240,713 | $10,165,672 |
+| StdDev of metric change (%) | 19.56% | 43.37% | 60.89% |
+| StdDev of metric change (abs) | 74.30 | 164.70 | 231.23 |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `388` (from `2024-07-22` to `2025-08-13`)
@@ -55,6 +54,11 @@
     "start": "2025-09-02T00:00:00+00:00",
     "end": "2025-09-25T00:00:00+00:00",
     "period_days": 23
+  },
+  "metric_percent_std_percentiles": {
+    "p50": 19.56,
+    "p80": 43.37,
+    "p90": 60.89
   }
 }
 ```
