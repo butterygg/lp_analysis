@@ -6,7 +6,6 @@
 
 | Metric | Value |
 |---|---:|
-| Exposure to metric (window) | $36,436.08 |
 | Average total exposure (metric × exposure/unit) | $18,928,250.51 |
 | StdDev of hedging P&L (p50) | $2,769,936 |
 | StdDev of hedging P&L (p80) | $8,927,778 |
