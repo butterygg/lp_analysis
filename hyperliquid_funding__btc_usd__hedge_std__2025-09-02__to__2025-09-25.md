@@ -6,16 +6,15 @@
 
 | Metric | Value |
 |---|---:|
-| Average total exposure (metric × exposure/unit) | $34,732,439.14 |
-| StdDev of hedging P&L (p50) | $15,788,079 |
-| StdDev of hedging P&L (p80) | $33,789,059 |
-| StdDev of hedging P&L (p90) | $44,139,505 |
+| Average total exposure (metric × exposure/unit) | $34,676,521.02 |
 
-### Metric % Std (period)
+### Standard Deviations by Percentile (period)
 
-| Metric | Value (%) |
-|---|---:|
-| Std/Median (over window) | 101.94% |
+| Metric | p50 | p80 | p90 |
+|---|---:|---:|---:|
+| StdDev of hedging P&L | $15,762,661 | $33,734,660 | $44,068,442 |
+| StdDev of metric change (%) | 57.28% | 122.59% | 160.15% |
+| StdDev of metric change (abs) | 668.50 | 1,430.69 | 1,868.95 |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `434` (from `2024-06-08` to `2025-08-15`)
@@ -26,8 +25,8 @@
 {
   "kpi": "hyperliquid_funding",
   "profile": "btc_usd",
-  "exposure_to_metric": 23617.3,
-  "average_total_exposure": 34732439.14,
+  "exposure_to_metric": 23579.27,
+  "average_total_exposure": 34676521.02,
   "delta_abs_percentiles": {
     "p50": 668.5,
     "p80": 1430.69,
@@ -35,9 +34,9 @@
   },
   "metric_percent_std_pct": 101.94,
   "hedging_std_component": {
-    "p50": 15788078.87,
-    "p80": 33789059.37,
-    "p90": 44139504.81
+    "p50": 15762660.57,
+    "p80": 33734660.06,
+    "p90": 44068441.62
   },
   "debug": {
     "pair_count": 434,
@@ -55,6 +54,11 @@
     "start": "2025-09-02T00:00:00+00:00",
     "end": "2025-09-25T00:00:00+00:00",
     "period_days": 23
+  },
+  "metric_percent_std_percentiles": {
+    "p50": 57.28,
+    "p80": 122.59,
+    "p90": 160.15
   }
 }
 ```
