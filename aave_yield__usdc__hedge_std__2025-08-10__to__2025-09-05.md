@@ -7,9 +7,9 @@
 | Metric | Value |
 |---|---:|
 | Exposure to metric (window) | $39,472.42 |
-| StdDev of hedging P&L (p50) | $3,161,910.66 |
-| StdDev of hedging P&L (p80) | $10,614,547.16 |
-| StdDev of hedging P&L (p90) | $13,422,212.76 |
+| StdDev of hedging P&L (p50) | $3,161,911 |
+| StdDev of hedging P&L (p80) | $10,614,547 |
+| StdDev of hedging P&L (p90) | $13,422,213 |
 
 ## Inputs & Diagnostics
 - S→R pairs used: `382` (from `2024-07-27` to `2025-08-12`)

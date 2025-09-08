@@ -1,16 +1,19 @@
-# Hedging StdDev Report
+# Hedging Standard Deviation — aave_yield / usdt
 
-**KPI:** aave_yield  
-**Profile:** usdt  
 **Window (UTC):** 2025-08-01T00:00:00+00:00 → 2025-08-25T00:00:00+00:00  
 
-## Inputs
-- Exposure to metric: `45,874.01`
-- Fraction of portfolio exposed: `1.00`
-- Metric % Std over period: `40.80%` (std=`155.08`, median level=`380.14`)
+## Summary
 
-## Diagnostics
-- S->R pairs used: `387`  (from `2024-07-22` to `2025-08-12`)
+| Metric | Value |
+|---|---:|
+| Exposure to metric (window) | $45,874.01 |
+| StdDev of hedging P&L (p50) | $3,517,016 |
+| StdDev of hedging P&L (p80) | $7,867,306 |
+| StdDev of hedging P&L (p90) | $11,109,071 |
+
+## Inputs & Diagnostics
+- S→R pairs used: `387` (from `2024-07-22` to `2025-08-12`)
+- Metric % Std (period): `40.80%` (std=`155.08`, median level=`380.14`)
 
 ## Raw Output (for programmatic use)
 ```json

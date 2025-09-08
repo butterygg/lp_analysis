@@ -1,16 +1,19 @@
-# Hedging StdDev Report
+# Hedging Standard Deviation — aave_yield / usdc
 
-**KPI:** aave_yield  
-**Profile:** usdc  
 **Window (UTC):** 2025-08-01T00:00:00+00:00 → 2025-08-25T00:00:00+00:00  
 
-## Inputs
-- Exposure to metric: `36,436.08`
-- Fraction of portfolio exposed: `1.00`
-- Metric % Std over period: `51.60%` (std=`210.06`, median level=`407.12`)
+## Summary
 
-## Diagnostics
-- S->R pairs used: `387`  (from `2024-07-22` to `2025-08-12`)
+| Metric | Value |
+|---|---:|
+| Exposure to metric (window) | $36,436.08 |
+| StdDev of hedging P&L (p50) | $2,769,936 |
+| StdDev of hedging P&L (p80) | $8,927,778 |
+| StdDev of hedging P&L (p90) | $11,650,530 |
+
+## Inputs & Diagnostics
+- S→R pairs used: `384` (from `2024-07-27` to `2025-08-14`)
+- Metric % Std (period): `50.07%` (std=`202.97`, median level=`405.38`)
 
 ## Raw Output (for programmatic use)
 ```json
@@ -19,21 +22,21 @@
   "profile": "usdc",
   "exposure_to_metric": 36436.08,
   "delta_abs_percentiles": {
-    "p50": 76.87,
-    "p80": 237.79,
-    "p90": 329.21
+    "p50": 76.02,
+    "p80": 245.03,
+    "p90": 319.75
   },
   "hedging_std_component": {
-    "p50": 2800812.76,
-    "p80": 8664201.4,
-    "p90": 11995153.38
+    "p50": 2769936.47,
+    "p80": 8927778.19,
+    "p90": 11650530.36
   },
   "debug": {
-    "pair_count": 387,
-    "first_S_date": "2024-07-22",
-    "last_S_date": "2025-08-12",
-    "metric_change_std": 210.06,
-    "metric_level_median": 407.12
+    "pair_count": 384,
+    "first_S_date": "2024-07-27",
+    "last_S_date": "2025-08-14",
+    "metric_change_std": 202.97,
+    "metric_level_median": 405.38
   },
   "report": {
     "path": "/home/pimania/dev/butter/lp_analysis/aave_yield__usdc__hedge_std__2025-08-01__to__2025-08-25.md",
