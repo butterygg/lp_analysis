@@ -6,13 +6,13 @@
 
 | Metric | Value |
 |---|---:|
-| Average total exposure (metric × exposure/unit) | $34,701,892.79 |
+| Average total exposure (metric × exposure/unit) | $34,695,316.19 |
 
 ### Standard Deviations by Percentile (period)
 
 | Metric | p50 | p80 | p90 |
 |---|---:|---:|---:|
-| StdDev of hedging P&L | $12,259,630 | $24,398,517 | $36,269,994 |
+| StdDev of hedging P&L | $12,257,307 | $24,393,893 | $36,263,120 |
 | StdDev of metric change (%) | 39.83% | 79.27% | 117.84% |
 | StdDev of metric change (abs) | 515.65 | 1,026.22 | 1,525.55 |
 
@@ -25,8 +25,8 @@
 {
   "kpi": "hyperliquid_funding",
   "profile": "btc_usd",
-  "exposure_to_metric": 23775.05,
-  "average_total_exposure": 34701892.79,
+  "exposure_to_metric": 23770.54,
+  "average_total_exposure": 34695316.19,
   "delta_abs_percentiles": {
     "p50": 515.65,
     "p80": 1026.22,
@@ -34,9 +34,9 @@
   },
   "metric_percent_std_pct": 67.31,
   "hedging_std_component": {
-    "p50": 12259630.08,
-    "p80": 24398516.56,
-    "p90": 36269993.94
+    "p50": 12257306.67,
+    "p80": 24393892.63,
+    "p90": 36263120.16
   },
   "debug": {
     "pair_count": 418,
