@@ -23,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -8.99% and **median** -4.59% IL-only returns are shown below.
+- **Mean** -19.08% and **median** -9.46% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -38,8 +38,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **411**
-- Mean: **-8.99%**, Std: **16.65%**
-- Median: **-4.59%**  |  P25: **-10.16%**  |  P10: **-14.34%**  |  P75: **-0.92%**
+- Mean: **-19.08%**, Std: **25.55%**
+- Median: **-9.46%**  |  P25: **-22.70%**  |  P10: **-55.35%**  |  P75: **-1.56%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-4.59%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-9.46%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
 2. **Convert to multiplier**: 1 + 12.6% = 1.126
-3. **Apply median IL loss**: 1.126 × (1 + -4.6%) = 1.126 × 0.954 = 1.074
-4. **Net return for 23 days**: 7.4%
-5. **Annualized (APY)**: (1.074)^15.9 - 1 = **211.9% APY**
+3. **Apply median IL loss**: 1.126 × (1 + -9.5%) = 1.126 × 0.905 = 1.019
+4. **Net return for 23 days**: 1.9%
+5. **Annualized (APY)**: (1.019)^15.9 - 1 = **35.8% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)

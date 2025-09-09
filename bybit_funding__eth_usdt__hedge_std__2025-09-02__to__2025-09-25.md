@@ -6,45 +6,45 @@
 
 | Metric | Value |
 |---|---:|
-| Average total exposure (metric × exposure/unit) | $22,320,815.81 |
+| Average total exposure (metric × exposure/unit) | $22,273,737.43 |
 
 ### Standard Deviations by Percentile (period)
 
 | Metric | p50 | p80 | p90 |
 |---|---:|---:|---:|
-| StdDev of hedging P&L | $8,609,680 | $18,465,274 | $37,138,480 |
-| StdDev of metric change (%) | 51.47% | 110.38% | 222.01% |
-| StdDev of metric change (abs) | 289.20 | 620.24 | 1,247.46 |
+| StdDev of hedging P&L | $8,505,779 | $18,426,056 | $37,059,603 |
+| StdDev of metric change (%) | 50.95% | 110.38% | 222.01% |
+| StdDev of metric change (abs) | 286.31 | 620.24 | 1,247.46 |
 
 ## Inputs & Diagnostics
-- S→R pairs used: `418` (from `2024-06-20` to `2025-08-11`)
-- Metric % Std (period): `129.88%` (std=`729.80`, median level=`561.89`)
+- S→R pairs used: `418` (from `2024-06-25` to `2025-08-16`)
+- Metric % Std (period): `129.71%` (std=`728.81`, median level=`561.89`)
 
 ## Raw Output (for programmatic use)
 ```json
 {
   "kpi": "bybit_funding",
   "profile": "eth_usdt",
-  "exposure_to_metric": 29771.19,
-  "average_total_exposure": 22320815.81,
+  "exposure_to_metric": 29707.96,
+  "average_total_exposure": 22273737.43,
   "delta_abs_percentiles": {
-    "p50": 289.2,
+    "p50": 286.31,
     "p80": 620.24,
     "p90": 1247.46
   },
-  "metric_percent_std_pct": 129.88,
+  "metric_percent_std_pct": 129.71,
   "hedging_std_component": {
-    "p50": 8609680.36,
-    "p80": 18465273.93,
-    "p90": 37138480.39
+    "p50": 8505778.64,
+    "p80": 18426055.83,
+    "p90": 37059602.57
   },
   "debug": {
     "pair_count": 418,
-    "first_S_date": "2024-06-20",
-    "last_S_date": "2025-08-11",
-    "metric_change_std": 729.8,
+    "first_S_date": "2024-06-25",
+    "last_S_date": "2025-08-16",
+    "metric_change_std": 728.81,
     "metric_level_median": 561.89,
-    "metric_level_mean": 749.75
+    "metric_level_mean": 749.76
   },
   "report": {
     "path": "/home/pimania/dev/butter/lp_analysis/bybit_funding__eth_usdt__hedge_std__2025-09-02__to__2025-09-25.md",
@@ -56,7 +56,7 @@
     "period_days": 23
   },
   "metric_percent_std_percentiles": {
-    "p50": 51.47,
+    "p50": 50.95,
     "p80": 110.38,
     "p90": 222.01
   }

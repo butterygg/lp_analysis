@@ -23,7 +23,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -6.49% and **median** -3.84% IL-only returns are shown below.
+- **Mean** -16.01% and **median** -10.28% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -38,8 +38,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **411**
-- Mean: **-6.49%**, Std: **10.08%**
-- Median: **-3.84%**  |  P25: **-7.51%**  |  P10: **-10.92%**  |  P75: **-1.33%**
+- Mean: **-16.01%**, Std: **18.84%**
+- Median: **-10.28%**  |  P25: **-20.97%**  |  P10: **-36.13%**  |  P75: **-2.98%**
 
 ## Calculating Your Net APY
 
@@ -60,13 +60,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-3.84%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-10.28%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.063 = 12.6%
 2. **Convert to multiplier**: 1 + 12.6% = 1.126
-3. **Apply median IL loss**: 1.126 × (1 + -3.8%) = 1.126 × 0.962 = 1.083
-4. **Net return for 23 days**: 8.3%
-5. **Annualized (APY)**: (1.083)^15.9 - 1 = **253.6% APY**
+3. **Apply median IL loss**: 1.126 × (1 + -10.3%) = 1.126 × 0.897 = 1.010
+4. **Net return for 23 days**: 1.0%
+5. **Annualized (APY)**: (1.010)^15.9 - 1 = **17.6% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
