@@ -1,0 +1,28 @@
+{
+    "chain_tvl_ratios": {
+        "default": {
+            "min_tvl_ratio": 0.7,
+            "max_tvl_ratio": 2.2,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0
+        },
+        "Arbitrum": {
+            "min_tvl_ratio": 0.6,
+            "max_tvl_ratio": 2.5,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0
+        },
+        "Base": {
+            "min_tvl_ratio": 0.8,
+            "max_tvl_ratio": 2.0,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0
+        },
+        "Unichain": {
+            "min_tvl_ratio": 0.5,
+            "max_tvl_ratio": 3.0,
+            "min_up_price": 0.01,
+            "max_up_price": 1.0
+        }
+    }
+}
