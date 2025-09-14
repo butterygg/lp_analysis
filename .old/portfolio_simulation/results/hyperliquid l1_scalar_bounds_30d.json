@@ -1,0 +1,22 @@
+{
+  "chain": "Hyperliquid L1",
+  "current_tvl": 2285598504,
+  "lower_bound": 1223679337.0721896,
+  "upper_bound": 4571197008.0,
+  "confidence_level": 0.95,
+  "bootstrap_lower": 1241620580.0064802,
+  "bootstrap_upper": 5504161997.191116,
+  "regime_aware_lower": 1216284515.7142131,
+  "regime_aware_upper": 5603487806.360918,
+  "log_returns_mean": 0.2594015873508344,
+  "log_returns_std": 0.41812211287758283,
+  "volatility_30day": 0.43708017391300263,
+  "volatility_annual": 1.5245683938539736,
+  "num_periods": 211,
+  "data_days": 264,
+  "used_priors": false,
+  "prior_weight": 0.0,
+  "growth_cap_applied": false,
+  "age_cap_multiplier": 2.0,
+  "analysis_date": "2025-08-22T16:18:57.458890"
+}
