@@ -7,7 +7,7 @@ _Windows strictly earlier than **2025-09-18**. All figures exclude trading fees.
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/solana.Use the global DefiLlama TVL endpoint at https://api.llama.fi/charts to obtain the total TVL across all chains. For each series, return the value from the record with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC).Compute the solana TVL share as (chain TVL / total TVL) * 100. Multiply that percentage by 100, then report as an integer, rounded up.
+Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/solana. Use the global DefiLlama TVL endpoint at https://api.llama.fi/v2/historicalChainTvl to obtain the total TVL across all chains. For each series, return the value from the record with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). Compute the solana TVL share as (chain TVL / total TVL) * 100. Multiply that percentage by 100, then report as an integer, rounded up. 
 
 </details>
 
