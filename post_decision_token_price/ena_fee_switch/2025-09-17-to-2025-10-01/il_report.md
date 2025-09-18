@@ -47,7 +47,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -8.27% and **median** -6.53% IL-only returns are shown below.
+- **Mean** -13.65% and **median** -7.22% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -62,8 +62,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **422**
-- Mean: **-8.27%**, Std: **8.90%**
-- Median: **-6.53%**  |  P25: **-11.98%**  |  P10: **-19.29%**  |  P75: **-0.75%**
+- Mean: **-13.65%**, Std: **21.82%**
+- Median: **-7.22%**  |  P25: **-14.53%**  |  P10: **-34.43%**  |  P75: **-1.00%**
 
 ## Calculating Your Net APY
 
@@ -84,13 +84,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.53%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-7.22%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.038 = 7.7%
 2. **Convert to multiplier**: 1 + 7.7% = 1.077
-3. **Apply median IL loss**: 1.077 × (1 + -6.5%) = 1.077 × 0.935 = 1.006
-4. **Net return for 14 days**: 0.6%
-5. **Annualized (APY)**: (1.006)^26.1 - 1 = **18.2% APY**
+3. **Apply median IL loss**: 1.077 × (1 + -7.2%) = 1.077 × 0.928 = 0.999
+4. **Net return for 14 days**: -0.1%
+5. **Annualized (APY)**: (0.999)^26.1 - 1 = **-2.7% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
