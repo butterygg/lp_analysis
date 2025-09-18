@@ -1,15 +1,20 @@
-# LP IL-Only Report — `lending_tvl_mktshare` / `morpho_blue`
+# LP IL-Only Report — `post_decision_token_price` / `hype_usdh_decision`
 
-_Windows strictly earlier than **2025-09-18**. All figures exclude trading fees._
+_Windows strictly earlier than **2025-09-26**. All figures exclude trading fees._
 
 ## Data Source
-**Metric which market is forecasting:** Morpho Blue lending TVL share as of Oct 1, 2025
+**Metric which market is forecasting:** (missing `offchain params.cfmTitle`)
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama lending protocol endpoint at https://api.llama.fi/protocol/morpho-blue. Extract the TVL (totalLiquidityUSD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, query https://api.llama.fi/protocol/<slug> for each of the following lending protocols slugs and sum their TVL values at that same timestamp: aave-v3; morpho-blue; sparklend; justlend; kamino-lend; maple; compound-v3; venus-core-pool; euler-v2; fluid-lending; lista-lending; jupiter-lend; suilend. Compute the morpho-blue lending TVL share as (protocol TVL / aggregate lending TVL) * 100 and report that percentage * 100, rounded up to the nearest integer. 
+Use the CoinMarketCap detail/chart endpoint at https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail/chart with query parameters id=32196, convertId=2781 (USD), and range=START_UNIX~END_UNIX. Resolve DECISION_TIME_UTC from ${DISAMBIGUATION_URI}. Set START_UNIX to the Unix timestamp (seconds) at DECISION_TIME_UTC + 120 minutes, and set END_UNIX to START_UNIX + 43_200. Treat the interval as half-open: include START_UNIX and exclude END_UNIX. From the JSON response, read data.points (a mapping from timestamps to samples). For each entry (ts, point): if ts > 10_000_000_000 then ts is in milliseconds; divide by 1000 to obtain seconds. Extract the USD price as point.v[0] if point.v exists; otherwise use point.c. Discard any points with missing/NaN or non-positive prices. Consider only points with timestamps t satisfying START_UNIX ≤ t < END_UNIX (UTC). Compute the median of these USD prices. Multiply by 100, then report the number as an integer, rounded up.
 
 </details>
+
+## Decision Market Note
+- Decision: Who should issue USDH?
+- Decision date: 2025-09-14 11:00 UTC (2025-09-14T11:00:00Z)
+- This is a decision market. The decision may or may not lead to additional volatility and impermanent loss relative to the modeled analysis here, depending on how unexpected the final decision is and how impactful it is.
 
 ## Market Structure
 Each market contains **UP** and **DOWN** tokens representing directional bets on changes in the underlying metric:
@@ -19,7 +24,7 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - UP and DOWN prices always sum to **$1.00**, forming a complementary pair
 
 ## Price Mapping
-- Market bounds: **min = 8.2**, **max = 13**. UP's USD price p is a linear mapping of the metric m into [0,1].
+- Market bounds: **min = 7.5**, **max = 65**. UP's USD price p is a linear mapping of the metric m into [0,1].
 - Mapping: we scale the metric between min and max to get a number p between 0 and 1 (values below min map to 0; above max map to 1)
 - DOWN's USD price is 1 − p
 - AMM pool price (UP:DOWN) = p / (1 − p)
@@ -27,8 +32,8 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - Impermanent loss depends on how far the pool price moves away from the starting price at your deposit; larger moves ⇒ larger IL (fees excluded here)
 
 ### Worked Example (for intuition)
-- Take m at 60% of range: m = min + 0.60 × (max − min) = 11.08
-- UP price: p = (m − min) / (max − min) = (11.08 − 8.2) / (13 − 8.2) = **0.600**
+- Take m at 60% of range: m = min + 0.60 × (max − min) = 42
+- UP price: p = (m − min) / (max − min) = (42 − 7.5) / (65 − 7.5) = **0.600**
 - AMM pool price (UP:DOWN): p/(1 − p) = 0.600 / 0.400 = **1.500**
 
 
@@ -43,7 +48,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -22.30% and **median** -9.89% IL-only returns are shown below.
+- **Mean** -12.77% and **median** -9.10% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -57,15 +62,15 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **407**
-- Mean: **-22.30%**, Std: **25.67%**
-- Median: **-9.89%**  |  P25: **-37.22%**  |  P10: **-57.70%**  |  P75: **-3.18%**
+- Count: **176**
+- Mean: **-12.77%**, Std: **13.11%**
+- Median: **-9.10%**  |  P25: **-16.95%**  |  P10: **-31.12%**  |  P75: **-2.77%**
 
 ## Calculating Your Net APY
 
 To determine your actual returns, combine Merkl incentive APY with these IL losses:
 
-**Period Factor**: 0.036 (since this is a 13-day market)
+**Period Factor**: 0.014 (since this is a 5-day market)
 
 ### Formula:
 ```
@@ -80,22 +85,22 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-9.89%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-9.10%)**:
 
-1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
-2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -9.9%) = 1.071 × 0.901 = 0.965
-4. **Net return for 13 days**: -3.5%
-5. **Annualized (APY)**: (0.965)^28.1 - 1 = **-62.9% APY**
+1. **Scale Merkl APY to period**: 200% × 0.014 = 2.7%
+2. **Convert to multiplier**: 1 + 2.7% = 1.027
+3. **Apply median IL loss**: 1.027 × (1 + -9.1%) = 1.027 × 0.909 = 0.934
+4. **Net return for 5 days**: -6.6%
+5. **Annualized (APY)**: (0.934)^73.0 - 1 = **-99.3% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
    - **Note**: Merkl APY can vary over the duration of the market depending on the amount of liquidity provided
-2. Multiply that APY by **0.036**
+2. Multiply that APY by **0.014**
 3. Add 1 to get the incentive multiplier
 4. Multiply by (1 + your_expected_IL_return)
-5. Subtract 1 to get your net return over 13 days
-6. To annualize: raise (1 + return) to the power of 28.1, then subtract 1
+5. Subtract 1 to get your net return over 5 days
+6. To annualize: raise (1 + return) to the power of 73.0, then subtract 1
 
 # Technical Implementation
 
