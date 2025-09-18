@@ -1,13 +1,13 @@
-# LP IL-Only Report — `chain_tvl_mktshare` / `solana`
+# LP IL-Only Report — `lending_tvl_mktshare` / `euler-v2`
 
 _Windows strictly earlier than **2025-09-18**. All figures exclude trading fees._
 
 ## Data Source
-**Metric which market is forecasting:** Solana TVL market share as of Oct 1, 2025
+**Metric which market is forecasting:** Morpho Blue lending TVL share as of Oct 1, 2025
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/solana.Use the global DefiLlama TVL endpoint at https://api.llama.fi/charts to obtain the total TVL across all chains. For each series, return the value from the record with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC).Compute the solana TVL share as (chain TVL / total TVL) * 100. Multiply that percentage by 100, then report as an integer, rounded up.
+Use the DefiLlama lending protocol endpoint at https://api.llama.fi/protocol/euler-v2. Extract the TVL (totalLiquidityUSD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, query https://api.llama.fi/protocol/<slug> for each of the following lending protocols slugs and sum their TVL values at that same timestamp: aave-v3; morpho-blue; sparklend; justlend; kamino-lend; maple; compound-v3; venus-core-pool; euler-v2; fluid-lending; lista-lending; jupiter-lend; suilend. Compute the euler-v2 lending TVL share as (protocol TVL / aggregate lending TVL) * 100 and report that percentage * 100, rounded up to the nearest integer.
 
 </details>
 
@@ -19,7 +19,7 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - UP and DOWN prices always sum to **$1.00**, forming a complementary pair
 
 ## Price Mapping
-- Market bounds: **min = 3**, **max = 5**. UP's USD price p is a linear mapping of the metric m into [0,1].
+- Market bounds: **min = 7.9**, **max = 13**. UP's USD price p is a linear mapping of the metric m into [0,1].
 - Mapping: we scale the metric between min and max to get a number p between 0 and 1 (values below min map to 0; above max map to 1)
 - DOWN's USD price is 1 − p
 - AMM pool price (UP:DOWN) = p / (1 − p)
@@ -27,8 +27,8 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - Impermanent loss depends on how far the pool price moves away from the starting price at your deposit; larger moves ⇒ larger IL (fees excluded here)
 
 ### Worked Example (for intuition)
-- Take m at 60% of range: m = min + 0.60 × (max − min) = 4.2
-- UP price: p = (m − min) / (max − min) = (4.2 − 3) / (5 − 3) = **0.600**
+- Take m at 60% of range: m = min + 0.60 × (max − min) = 10.96
+- UP price: p = (m − min) / (max − min) = (10.96 − 7.9) / (13 − 7.9) = **0.600**
 - AMM pool price (UP:DOWN): p/(1 − p) = 0.600 / 0.400 = **1.500**
 
 
@@ -43,7 +43,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -14.34% and **median** -9.14% IL-only returns are shown below.
+- **Mean** -21.51% and **median** -10.34% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -57,9 +57,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **331**
-- Mean: **-14.34%**, Std: **19.40%**
-- Median: **-9.14%**  |  P25: **-16.98%**  |  P10: **-28.31%**  |  P75: **-2.36%**
+- Count: **407**
+- Mean: **-21.51%**, Std: **22.97%**
+- Median: **-10.34%**  |  P25: **-35.43%**  |  P10: **-55.72%**  |  P75: **-3.67%**
 
 ## Calculating Your Net APY
 
@@ -80,13 +80,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-9.14%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-10.34%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
 2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -9.1%) = 1.071 × 0.909 = 0.973
-4. **Net return for 13 days**: -2.7%
-5. **Annualized (APY)**: (0.973)^28.1 - 1 = **-53.2% APY**
+3. **Apply median IL loss**: 1.071 × (1 + -10.3%) = 1.071 × 0.897 = 0.960
+4. **Net return for 13 days**: -4.0%
+5. **Annualized (APY)**: (0.960)^28.1 - 1 = **-67.8% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)

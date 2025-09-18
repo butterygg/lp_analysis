@@ -7,7 +7,7 @@ _Windows strictly earlier than **2025-09-18**. All figures exclude trading fees.
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama lending protocol endpoint at https://api.llama.fi/protocol/aave-v3. Extract the TVL (totalLiquidityUSD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, rank all lending protocols from https://api.llama.fi/protocols by their TVL value (totalLiquidityUSD) at 2025-10-01 00:00:00 UTC (UTC), pick the top 12, and sum those TVL values at that same timestamp.Compute the Aave V3 lending TVL share as (protocol TVL / aggregate lending TVL) * 100 and report that percentage * 100, rounded up to the nearest integer.
+Use the DefiLlama lending protocol endpoint at https://api.llama.fi/protocol/aave-v3. Extract the TVL (totalLiquidityUSD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, query https://api.llama.fi/protocol/<slug> for each of the following lending protocols slugs and sum their TVL values at that same timestamp: aave-v3; morpho-blue; sparklend; justlend; kamino-lend; maple; compound-v3; venus-core-pool; euler-v2; fluid-lending; lista-lending; jupiter-lend; suilend. Compute the aave-v3 lending TVL share as (protocol TVL / aggregate lending TVL) * 100 and report that percentage * 100, rounded up to the nearest integer.
 
 </details>
 
@@ -43,7 +43,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -37.14% and **median** -35.41% IL-only returns are shown below.
+- **Mean** -39.92% and **median** -41.97% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -58,8 +58,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **513**
-- Mean: **-37.14%**, Std: **20.07%**
-- Median: **-35.41%**  |  P25: **-54.62%**  |  P10: **-64.08%**  |  P75: **-20.71%**
+- Mean: **-39.92%**, Std: **19.82%**
+- Median: **-41.97%**  |  P25: **-56.59%**  |  P10: **-64.96%**  |  P75: **-23.63%**
 
 ## Calculating Your Net APY
 
@@ -80,13 +80,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-35.41%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-41.97%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
 2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -35.4%) = 1.071 × 0.646 = 0.692
-4. **Net return for 13 days**: -30.8%
-5. **Annualized (APY)**: (0.692)^28.1 - 1 = **-100.0% APY**
+3. **Apply median IL loss**: 1.071 × (1 + -42.0%) = 1.071 × 0.580 = 0.622
+4. **Net return for 13 days**: -37.8%
+5. **Annualized (APY)**: (0.622)^28.1 - 1 = **-100.0% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
