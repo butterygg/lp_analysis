@@ -47,7 +47,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -11.63% and **median** -5.59% IL-only returns are shown below.
+- **Mean** -8.29% and **median** -5.48% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -62,8 +62,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **399**
-- Mean: **-11.63%**, Std: **18.96%**
-- Median: **-5.59%**  |  P25: **-10.31%**  |  P10: **-31.75%**  |  P75: **-1.16%**
+- Mean: **-8.29%**, Std: **11.12%**
+- Median: **-5.48%**  |  P25: **-9.45%**  |  P10: **-19.11%**  |  P75: **-0.97%**
 
 ## Calculating Your Net APY
 
@@ -84,13 +84,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-5.59%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-5.48%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.038 = 7.7%
 2. **Convert to multiplier**: 1 + 7.7% = 1.077
-3. **Apply median IL loss**: 1.077 × (1 + -5.6%) = 1.077 × 0.944 = 1.016
-4. **Net return for 14 days**: 1.6%
-5. **Annualized (APY)**: (1.016)^26.1 - 1 = **53.2% APY**
+3. **Apply median IL loss**: 1.077 × (1 + -5.5%) = 1.077 × 0.945 = 1.018
+4. **Net return for 14 days**: 1.8%
+5. **Annualized (APY)**: (1.018)^26.1 - 1 = **58.2% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
