@@ -7,7 +7,7 @@ _Windows strictly earlier than **2025-09-18**. All figures exclude trading fees.
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama stablecoin endpoint at https://stablecoins.llama.fi/stablecoin/146. Extract the circulating supply (pegged USD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, query https://stablecoins.llama.fi/stablecoin/<id> for each of the following USD-pegged stablecoins and sum their circulating peggedUSD values at that same timestamp: Tether (USDT, id 1); USD Coin (USDC, id 2); Ethena USDe (USDe, id 146); Sky Dollar (USDS, id 209); World Liberty Financial USD (USD1, id 262); BlackRock USD (BUIDL, id 173); Ethena USDtb (USDTB, id 221); Falcon USD (USDf, id 246); PayPal USD (PYUSD, id 120); First Digital USD (FDUSD, id 119); Ripple USD (RLUSD, id 250); USDX Money USDX (USDX, id 214). Compute the market-cap share for that stablecoin (the one identified by stablecoin_id above) as (stablecoin circulating / aggregate circulating) * 100 and report that percentage * 100, rounded up to the nearest integer.
+Use the DefiLlama stablecoin endpoint at https://stablecoins.llama.fi/stablecoin/146. Extract the circulating supply (pegged USD) series and return the value with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). For the denominator, query https://stablecoins.llama.fi/stablecoin/<id> for each of the following USD-pegged stablecoins and sum their circulating peggedUSD values at that same timestamp: Tether (USDT, id 1); USD Coin (USDC, id 2); Ethena USDe (USDe, id 146); Sky Dollar (USDS, id 209); World Liberty Financial USD (USD1, id 262); BlackRock USD (BUIDL, id 173); Ethena USDtb (USDTB, id 221); Falcon USD (USDf, id 246); PayPal USD (PYUSD, id 120); First Digital USD (FDUSD, id 119); Ripple USD (RLUSD, id 250); USDX Money USDX (USDX, id 214). Compute the market-cap share for that stablecoin (the one identified by stablecoin_id above) as (stablecoin circulating / aggregate circulating) * 100 and report that percentage * 100, rounded up to the nearest integer. 
 
 </details>
 
@@ -43,7 +43,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -20.88% and **median** -15.07% IL-only returns are shown below.
+- **Mean** -12.59% and **median** -4.77% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -57,9 +57,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **441**
-- Mean: **-20.88%**, Std: **24.49%**
-- Median: **-15.07%**  |  P25: **-23.80%**  |  P10: **-56.49%**  |  P75: **-4.58%**
+- Count: **381**
+- Mean: **-12.59%**, Std: **18.04%**
+- Median: **-4.77%**  |  P25: **-19.83%**  |  P10: **-29.81%**  |  P75: **-0.72%**
 
 ## Calculating Your Net APY
 
@@ -80,13 +80,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-15.07%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-4.77%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
 2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -15.1%) = 1.071 × 0.849 = 0.910
-4. **Net return for 13 days**: -9.0%
-5. **Annualized (APY)**: (0.910)^28.1 - 1 = **-93.0% APY**
+3. **Apply median IL loss**: 1.071 × (1 + -4.8%) = 1.071 × 0.952 = 1.020
+4. **Net return for 13 days**: 2.0%
+5. **Annualized (APY)**: (1.020)^28.1 - 1 = **74.8% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
