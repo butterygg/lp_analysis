@@ -1,13 +1,13 @@
-# LP IL-Only Report — `chain_tvl_mktshare` / `base`
+# LP IL-Only Report — `dex_volume_mktshare` / `polymarket`
 
 _Windows strictly earlier than **2025-09-18**. All figures exclude trading fees._
 
 ## Data Source
-**Metric which market is forecasting:** Base TVL market share as of Oct 1, 2025
+**Metric which market is forecasting:** Polymarket 7-day average volume dominance vs Kalshi as of Oct 1, 2025
 
 <details><summary>Oracle Question used to resolve metric value</summary>
 
-Use the DefiLlama API historical chain TVL endpoint at https://api.llama.fi/v2/historicalChainTvl/base. Use the global DefiLlama TVL endpoint at https://api.llama.fi/v2/historicalChainTvl to obtain the total TVL across all chains. For each series, return the value from the record with the greatest timestamp at or before 2025-10-01 00:00:00 UTC (UTC). Compute the base TVL share as (chain TVL / total TVL) * 100. Multiply that percentage by 100, then report as an integer, rounded up. 
+Use the DefiLlama DEX summary endpoint at https://api.llama.fi/summary/dexs/polymarket?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=true. Extract the totalDataChart daily volume series and compute the arithmetic mean of the daily volume values for timestamps t with 2025-10-01 00:00:00 UTC - 7 days ≤ t < 2025-10-01 00:00:00 UTC (UTC). For the denominator, query the same endpoint for each DEX slug in Polymarket (slug polymarket); Kalshi (slug kalshi) and compute their seven-day trailing average daily volume over the same interval. Sum those trailing averages to form the denominator. Compute the volume market share for the DEX identified by dex_slug as (target trailing average / denominator trailing average sum) * 100 and report that percentage as a floating-point value.
 
 </details>
 
@@ -19,7 +19,7 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - UP and DOWN prices always sum to **$1.00**, forming a complementary pair
 
 ## Price Mapping
-- Market bounds: **min = 2.8**, **max = 3.5**. UP's USD price p is a linear mapping of the metric m into [0,1].
+- Market bounds: **min = 0**, **max = 110**. UP's USD price p is a linear mapping of the metric m into [0,1].
 - Mapping: we scale the metric between min and max to get a number p between 0 and 1 (values below min map to 0; above max map to 1)
 - DOWN's USD price is 1 − p
 - AMM pool price (UP:DOWN) = p / (1 − p)
@@ -27,8 +27,8 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - Impermanent loss depends on how far the pool price moves away from the starting price at your deposit; larger moves ⇒ larger IL (fees excluded here)
 
 ### Worked Example (for intuition)
-- Take m at 60% of range: m = min + 0.60 × (max − min) = 3.22
-- UP price: p = (m − min) / (max − min) = (3.22 − 2.8) / (3.5 − 2.8) = **0.600**
+- Take m at 60% of range: m = min + 0.60 × (max − min) = 66
+- UP price: p = (m − min) / (max − min) = (66 − 0) / (110 − 0) = **0.600**
 - AMM pool price (UP:DOWN): p/(1 − p) = 0.600 / 0.400 = **1.500**
 
 
@@ -43,7 +43,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -1.72% and **median** -0.69% IL-only returns are shown below.
+- **Mean** -3.17% and **median** -0.51% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -57,9 +57,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **344**
-- Mean: **-1.72%**, Std: **2.69%**
-- Median: **-0.69%**  |  P25: **-1.87%**  |  P10: **-4.40%**  |  P75: **-0.19%**
+- Count: **522**
+- Mean: **-3.17%**, Std: **9.37%**
+- Median: **-0.51%**  |  P25: **-1.94%**  |  P10: **-5.64%**  |  P75: **-0.08%**
 
 ## Calculating Your Net APY
 
@@ -80,13 +80,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-0.69%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-0.51%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
 2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -0.7%) = 1.071 × 0.993 = 1.064
-4. **Net return for 13 days**: 6.4%
-5. **Annualized (APY)**: (1.064)^28.1 - 1 = **467.8% APY**
+3. **Apply median IL loss**: 1.071 × (1 + -0.5%) = 1.071 × 0.995 = 1.066
+4. **Net return for 13 days**: 6.6%
+5. **Annualized (APY)**: (1.066)^28.1 - 1 = **497.2% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)

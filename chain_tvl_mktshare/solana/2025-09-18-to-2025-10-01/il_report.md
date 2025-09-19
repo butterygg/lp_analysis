@@ -19,7 +19,7 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - UP and DOWN prices always sum to **$1.00**, forming a complementary pair
 
 ## Price Mapping
-- Market bounds: **min = 6**, **max = 9.5**. UP's USD price p is a linear mapping of the metric m into [0,1].
+- Market bounds: **min = 5.5**, **max = 9.5**. UP's USD price p is a linear mapping of the metric m into [0,1].
 - Mapping: we scale the metric between min and max to get a number p between 0 and 1 (values below min map to 0; above max map to 1)
 - DOWN's USD price is 1 − p
 - AMM pool price (UP:DOWN) = p / (1 − p)
@@ -27,8 +27,8 @@ Each market contains **UP** and **DOWN** tokens representing directional bets on
 - Impermanent loss depends on how far the pool price moves away from the starting price at your deposit; larger moves ⇒ larger IL (fees excluded here)
 
 ### Worked Example (for intuition)
-- Take m at 60% of range: m = min + 0.60 × (max − min) = 8.1
-- UP price: p = (m − min) / (max − min) = (8.1 − 6) / (9.5 − 6) = **0.600**
+- Take m at 60% of range: m = min + 0.60 × (max − min) = 7.9
+- UP price: p = (m − min) / (max − min) = (7.9 − 5.5) / (9.5 − 5.5) = **0.600**
 - AMM pool price (UP:DOWN): p/(1 − p) = 0.600 / 0.400 = **1.500**
 
 
@@ -43,7 +43,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -17.30% and **median** -6.65% IL-only returns are shown below.
+- **Mean** -4.62% and **median** -0.91% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -58,8 +58,8 @@ This time series shows how IL-only portfolio returns have varied across differen
 ### Distribution Summary (IL-only, %)
 
 - Count: **344**
-- Mean: **-17.30%**, Std: **21.98%**
-- Median: **-6.65%**  |  P25: **-28.34%**  |  P10: **-43.90%**  |  P75: **-1.28%**
+- Mean: **-4.62%**, Std: **14.14%**
+- Median: **-0.91%**  |  P25: **-3.28%**  |  P10: **-6.62%**  |  P75: **-0.16%**
 
 ## Calculating Your Net APY
 
@@ -80,13 +80,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.65%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-0.91%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.036 = 7.1%
 2. **Convert to multiplier**: 1 + 7.1% = 1.071
-3. **Apply median IL loss**: 1.071 × (1 + -6.7%) = 1.071 × 0.933 = 1.000
-4. **Net return for 13 days**: -0.0%
-5. **Annualized (APY)**: (1.000)^28.1 - 1 = **-0.1% APY**
+3. **Apply median IL loss**: 1.071 × (1 + -0.9%) = 1.071 × 0.991 = 1.061
+4. **Net return for 13 days**: 6.1%
+5. **Annualized (APY)**: (1.061)^28.1 - 1 = **433.5% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)

@@ -47,7 +47,7 @@ We simulate starting at each historical window strictly earlier than the cutoff 
 We **exclude** very early windows until a minimum history (processing.min_historical_data_months) has elapsed to avoid unstable bounds.
 
 ## Important
-- **Mean** -10.99% and **median** -6.91% IL-only returns are shown below.
+- **Mean** -4.51% and **median** -1.10% IL-only returns are shown below.
 - These IL losses must be compared to incentive APY to calculate your net returns.
 
 ## Portfolio Performance
@@ -61,9 +61,9 @@ This time series shows how IL-only portfolio returns have varied across differen
 
 ### Distribution Summary (IL-only, %)
 
-- Count: **264**
-- Mean: **-10.99%**, Std: **10.31%**
-- Median: **-6.91%**  |  P25: **-17.62%**  |  P10: **-27.83%**  |  P75: **-2.53%**
+- Count: **278**
+- Mean: **-4.51%**, Std: **11.92%**
+- Median: **-1.10%**  |  P25: **-3.34%**  |  P10: **-8.97%**  |  P75: **-0.25%**
 
 ## Calculating Your Net APY
 
@@ -84,13 +84,13 @@ Where:
 - **IL_Return**: Your expected impermanent loss return (as a decimal, typically negative)
 
 ### Example Calculation (Hypothetical Numbers Only):
-**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-6.91%)**:
+**Example calculation only**: Let's say Merkl shows **200% APY** (this is just an example - actual APY varies by market) and you experience the **median IL loss (-1.10%)**:
 
 1. **Scale Merkl APY to period**: 200% × 0.038 = 7.7%
 2. **Convert to multiplier**: 1 + 7.7% = 1.077
-3. **Apply median IL loss**: 1.077 × (1 + -6.9%) = 1.077 × 0.931 = 1.002
-4. **Net return for 14 days**: 0.2%
-5. **Annualized (APY)**: (1.002)^26.1 - 1 = **6.2% APY**
+3. **Apply median IL loss**: 1.077 × (1 + -1.1%) = 1.077 × 0.989 = 1.065
+4. **Net return for 14 days**: 6.5%
+5. **Annualized (APY)**: (1.065)^26.1 - 1 = **415.1% APY**
 
 **Steps to use this with your actual numbers:**
 1. Find your market's Merkl campaign and note the **actual APY** (not the 200% example)
